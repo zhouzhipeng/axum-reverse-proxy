@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    http::{HeaderMap, Request, Response, StatusCode},
+    http::{Request, Response, StatusCode},
     response::IntoResponse,
     routing::any,
     Router,
@@ -8,12 +8,12 @@ use axum::{
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use hyper_util::rt::TokioExecutor;
-use std::convert::Infallible;
+use std::{convert::Infallible, sync::Arc};
 use tracing::{error, trace};
 
 pub struct ReverseProxy {
     target: String,
-    client: Client<HttpConnector, Body>,
+    client: Arc<Client<HttpConnector, Body>>,
 }
 
 impl ReverseProxy {
@@ -21,10 +21,18 @@ impl ReverseProxy {
         let mut connector = HttpConnector::new();
         connector.set_nodelay(true);
         connector.enforce_http(false);
+        connector.set_keepalive(Some(std::time::Duration::from_secs(60)));
+        connector.set_connect_timeout(Some(std::time::Duration::from_secs(10)));
+        connector.set_reuse_address(true);
 
-        let client = Client::builder(TokioExecutor::new())
-            .http2_only(true)
-            .build(connector);
+        let client = Arc::new(
+            Client::builder(TokioExecutor::new())
+                .pool_idle_timeout(std::time::Duration::from_secs(60))
+                .pool_max_idle_per_host(32)
+                .retry_canceled_requests(true)
+                .set_host(true)
+                .build(connector),
+        );
 
         Self {
             target: target.to_string(),
@@ -47,63 +55,80 @@ impl ReverseProxy {
         };
         trace!("Request body collected body_length={}", body_bytes.len());
 
-        // Build the new request
-        let mut forward_req = Request::builder()
-            .method(parts.method)
-            .uri(format!(
+        // Build the new request with retries
+        let mut retries = 3;
+        let mut error_msg;
+
+        loop {
+            // Create a new request for each attempt
+            let mut builder = Request::builder().method(parts.method.clone()).uri(format!(
                 "{}{}",
                 self.target,
                 parts.uri.path_and_query().map(|x| x.as_str()).unwrap_or("")
-            ))
-            .body(Body::from(body_bytes))
-            .unwrap();
+            ));
 
-        // Forward headers
-        let mut forward_headers = HeaderMap::new();
-        for (key, value) in parts.headers.iter() {
-            if key != "host" {
-                forward_headers.insert(key, value.clone());
+            // Forward headers
+            for (key, value) in parts.headers.iter() {
+                if key != "host" {
+                    builder = builder.header(key, value);
+                }
             }
-        }
-        *forward_req.headers_mut() = forward_headers;
-        trace!(
-            "Forwarding headers forwarded_headers={:?}",
-            forward_req.headers()
-        );
 
-        // Send the request
-        match self.client.request(forward_req).await {
-            Ok(res) => {
-                trace!(
-                    "Received response status={} headers={:?} version={:?}",
-                    res.status(),
-                    res.headers(),
-                    res.version()
-                );
+            let forward_req = builder.body(Body::from(body_bytes.clone())).unwrap();
 
-                // Convert the response body
-                let (parts, body) = res.into_parts();
-                let body_bytes = match body.collect().await {
-                    Ok(collected) => collected.to_bytes(),
-                    Err(e) => {
-                        error!("Failed to read response body: {}", e);
-                        return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+            trace!(
+                "Forwarding headers forwarded_headers={:?}",
+                forward_req.headers()
+            );
+
+            match self.client.request(forward_req).await {
+                Ok(res) => {
+                    trace!(
+                        "Received response status={} headers={:?} version={:?}",
+                        res.status(),
+                        res.headers(),
+                        res.version()
+                    );
+
+                    // Convert the response body
+                    let (parts, body) = res.into_parts();
+                    let body_bytes = match body.collect().await {
+                        Ok(collected) => collected.to_bytes(),
+                        Err(e) => {
+                            error!("Failed to read response body: {}", e);
+                            return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+                        }
+                    };
+                    trace!("Response body collected body_length={}", body_bytes.len());
+
+                    // Build and return the response
+                    let mut response = Response::builder()
+                        .status(parts.status)
+                        .body(Body::from(body_bytes))
+                        .unwrap();
+
+                    *response.headers_mut() = parts.headers;
+                    return Ok(response);
+                }
+                Err(e) => {
+                    error_msg = e.to_string();
+                    retries -= 1;
+                    if retries == 0 {
+                        error!("Proxy error occurred after all retries err={}", error_msg);
+                        return Ok(Response::builder()
+                            .status(StatusCode::BAD_GATEWAY)
+                            .body(Body::from(format!(
+                                "Failed to connect to upstream server: {}",
+                                error_msg
+                            )))
+                            .unwrap());
                     }
-                };
-                trace!("Response body collected body_length={}", body_bytes.len());
-
-                // Build and return the response
-                let mut response = Response::builder()
-                    .status(parts.status)
-                    .body(Body::from(body_bytes))
-                    .unwrap();
-
-                *response.headers_mut() = parts.headers;
-                Ok(response)
-            }
-            Err(e) => {
-                error!("Proxy error occurred err={}", e);
-                Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+                    error!(
+                        "Proxy error occurred, retrying ({} left) err={}",
+                        retries, error_msg
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                }
             }
         }
     }
@@ -118,6 +143,9 @@ impl ReverseProxy {
 
 impl Clone for ReverseProxy {
     fn clone(&self) -> Self {
-        Self::new(&self.target)
+        Self {
+            target: self.target.clone(),
+            client: Arc::clone(&self.client),
+        }
     }
 }
