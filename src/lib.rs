@@ -1,15 +1,18 @@
 use axum::{
-    body::Body,
+    Router,
+    routing::any,
     http::{Request, Uri},
     response::Response,
-    routing::any,
-    Router,
+    body::Body,
 };
 use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
 use hyper_util::{
-    client::legacy::connect::HttpConnector, client::legacy::Client, rt::TokioExecutor,
+    client::legacy::Client,
+    rt::TokioExecutor,
+    client::legacy::connect::HttpConnector,
 };
+use http_body_util::{BodyExt, Full};
+use tracing::{trace, error, instrument};
 
 pub struct ReverseProxy {
     target_url: Uri,
@@ -17,8 +20,9 @@ pub struct ReverseProxy {
 }
 
 impl ReverseProxy {
+    #[instrument]
     pub fn new(target_url: &str) -> Self {
-        println!("Creating proxy with target URL: {}", target_url);
+        trace!(target_url, "Creating new reverse proxy");
         let target_url = if target_url.ends_with('/') {
             target_url.to_string()
         } else {
@@ -31,6 +35,7 @@ impl ReverseProxy {
         }
     }
 
+    #[instrument(skip(self, req))]
     pub async fn proxy_request(
         &self,
         req: Request<Body>,
@@ -38,21 +43,25 @@ impl ReverseProxy {
         // Extract parts we need before consuming the request
         let method = req.method().clone();
         let headers = req.headers().clone();
-        let path_and_query = req.uri().path_and_query().map(|x| x.as_str()).unwrap_or("");
-
+        let path_and_query = req.uri().path_and_query()
+            .map(|x| x.as_str())
+            .unwrap_or("");
+            
         // Remove leading slash if present since target_url already has trailing slash
         let path_and_query = path_and_query.strip_prefix('/').unwrap_or(path_and_query);
         let uri = format!("{}{}", self.target_url, path_and_query);
-        println!("Proxying request: {} {}", method, uri);
-        println!("Original headers: {:?}", headers);
+        trace!(method = ?method, uri = %uri, "Proxying request");
+        trace!(headers = ?headers, "Original headers");
 
         // Convert the request body to bytes
         let body_bytes = req.into_body().collect().await?.to_bytes();
-        println!("Request body length: {}", body_bytes.len());
-
+        trace!(body_length = body_bytes.len(), "Request body collected");
+        
         // Build the new request
-        let mut builder = Request::builder().uri(uri).method(method);
-
+        let mut builder = Request::builder()
+            .uri(uri)
+            .method(method);
+            
         // Copy all headers except host
         let headers_mut = builder.headers_mut().unwrap();
         for (key, value) in headers.iter() {
@@ -60,19 +69,22 @@ impl ReverseProxy {
                 headers_mut.insert(key, value.clone());
             }
         }
-        println!("Forwarded headers: {:?}", headers_mut);
-
+        trace!(forwarded_headers = ?headers_mut, "Forwarding headers");
+        
         let req = builder.body(Full::new(body_bytes))?;
 
         // Forward the request and wait for response
         let response = self.client.request(req).await?;
-        println!("Response status: {}", response.status());
-        println!("Response headers: {:?}", response.headers());
-
+        trace!(
+            status = ?response.status(),
+            headers = ?response.headers(),
+            "Received response"
+        );
+        
         // Convert the response body
         let (parts, body) = response.into_parts();
         let body = body.collect().await?.to_bytes();
-        println!("Response body length: {}", body.len());
+        trace!(body_length = body.len(), "Response body collected");
         Ok(Response::from_parts(parts, Body::from(body)))
     }
 
@@ -83,7 +95,7 @@ impl ReverseProxy {
                 match proxy.proxy_request(req).await {
                     Ok(response) => response,
                     Err(err) => {
-                        println!("Proxy error: {}", err);
+                        error!(%err, "Proxy error occurred");
                         Response::builder()
                             .status(500)
                             .body(Body::from(format!("Proxy error: {}", err)))

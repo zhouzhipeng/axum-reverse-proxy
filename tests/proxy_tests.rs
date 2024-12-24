@@ -1,13 +1,25 @@
 use axum::{
-    extract::Json,
-    routing::{delete, get, post, put},
     Router,
+    routing::{get, post, put, delete},
+    extract::Json,
 };
 use rproxy::ReverseProxy;
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::net::TcpListener;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
+
+fn init_tracing() {
+    let _ = FmtSubscriber::builder()
+        .with_max_level(Level::TRACE)
+        .with_target(false)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true)
+        .try_init();
+}
 
 // Helper function to create a test server
 async fn create_test_server() -> SocketAddr {
@@ -51,6 +63,7 @@ async fn delay_handler(axum::extract::Path(seconds): axum::extract::Path<u64>) -
 
 #[tokio::test]
 async fn test_proxy_get_request() {
+    init_tracing();
     // Start the test server
     let server_addr = create_test_server().await;
 
@@ -84,6 +97,7 @@ async fn test_proxy_get_request() {
 
 #[tokio::test]
 async fn test_proxy_post_request() {
+    init_tracing();
     let server_addr = create_test_server().await;
 
     let proxy = ReverseProxy::new(&format!("http://{}", server_addr));
@@ -116,6 +130,7 @@ async fn test_proxy_post_request() {
 
 #[tokio::test]
 async fn test_proxy_large_payload() {
+    init_tracing();
     let server_addr = create_test_server().await;
 
     let proxy = ReverseProxy::new(&format!("http://{}", server_addr));
@@ -149,6 +164,7 @@ async fn test_proxy_large_payload() {
 
 #[tokio::test]
 async fn test_proxy_timeout() {
+    init_tracing();
     let server_addr = create_test_server().await;
 
     let proxy = ReverseProxy::new(&format!("http://{}", server_addr));
