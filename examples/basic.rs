@@ -7,7 +7,7 @@ use tracing_subscriber::FmtSubscriber;
 #[tokio::main]
 async fn main() {
     // Initialize tracing
-    let _subscriber = FmtSubscriber::builder()
+    FmtSubscriber::builder()
         .with_max_level(Level::INFO)
         .with_target(false)
         .with_thread_ids(true)
