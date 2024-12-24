@@ -3,7 +3,7 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use rproxy::ReverseProxy;
+use axum_reverse_proxy::ReverseProxy;
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::time::Duration;

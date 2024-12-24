@@ -1,5 +1,5 @@
 use axum::serve;
-use rproxy::ReverseProxy;
+use axum_reverse_proxy::ReverseProxy;
 use tokio::net::TcpListener;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;

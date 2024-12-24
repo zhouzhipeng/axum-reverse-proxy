@@ -118,6 +118,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-reverse-proxy"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bytes",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "tokio-test",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -930,24 +948,6 @@ dependencies = [
  "spin",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rproxy"
-version = "0.1.0"
-dependencies = [
- "axum",
- "bytes",
- "http-body-util",
- "hyper",
- "hyper-util",
- "reqwest",
- "serde_json",
- "tokio",
- "tokio-test",
- "tower",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
