@@ -1,19 +1,19 @@
 use axum::{
-    Router,
-    routing::{get, post, put, delete},
     extract::Json,
+    routing::{delete, get, post, put},
+    Router,
 };
 use rproxy::ReverseProxy;
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::net::TcpListener;
-use tracing::Level;
+use tracing::{trace, Level};
 use tracing_subscriber::FmtSubscriber;
 
 fn init_tracing() {
     let _ = FmtSubscriber::builder()
-        .with_max_level(Level::TRACE)
+        .with_max_level(Level::INFO)
         .with_target(false)
         .with_thread_ids(true)
         .with_file(true)
@@ -187,4 +187,43 @@ async fn test_proxy_timeout() {
         .await;
 
     assert!(response.is_err(), "Expected timeout error");
+}
+
+#[tokio::test]
+async fn test_proxy_http2_support() {
+    init_tracing();
+
+    // Create a test server with HTTP/2 support
+    let server_addr = create_test_server().await;
+
+    // Create a proxy to the test server
+    let proxy = ReverseProxy::new(&format!("http://{}", server_addr));
+    let app = proxy.router();
+    let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy_addr = proxy_listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(proxy_listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Create a client that uses HTTP/2
+    let client = reqwest::Client::builder()
+        .http2_prior_knowledge()
+        .build()
+        .unwrap();
+
+    let response = client
+        .get(format!("http://{}/json", proxy_addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    trace!(version = ?response.version(), "Response version");
+
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["status"], "success");
+    assert_eq!(body["message"], "Hello from test server!");
 }
