@@ -1,24 +1,24 @@
-use axum::{
-    body::Body,
-    extract::State,
-    http::{Request, Response, StatusCode},
-    response::IntoResponse,
-    Router,
-};
+use axum::{body::Body, extract::State, http::Request, response::Response, Router};
 use http_body_util::BodyExt;
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
-use hyper_util::rt::TokioExecutor;
+use hyper_util::{
+    client::legacy::{connect::HttpConnector, Client},
+    rt::TokioExecutor,
+};
 use std::{convert::Infallible, sync::Arc};
 use tracing::{error, trace};
 
 #[derive(Clone)]
 pub struct ReverseProxy {
+    path: String,
     target: String,
     client: Arc<Client<HttpConnector, Body>>,
 }
 
 impl ReverseProxy {
-    pub fn new(target: &str) -> Self {
+    pub fn new<S>(path: S, target: S) -> Self
+    where
+        S: Into<String>,
+    {
         let mut connector = HttpConnector::new();
         connector.set_nodelay(true);
         connector.enforce_http(false);
@@ -36,7 +36,8 @@ impl ReverseProxy {
         );
 
         Self {
-            target: target.to_string(),
+            path: path.into(),
+            target: target.into(),
             client,
         }
     }
@@ -51,7 +52,7 @@ impl ReverseProxy {
             Ok(collected) => collected.to_bytes(),
             Err(e) => {
                 error!("Failed to read request body: {}", e);
-                return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+                return Ok(Response::builder().status(500).body(Body::empty()).unwrap());
             }
         };
         trace!("Request body collected body_length={}", body_bytes.len());
@@ -97,7 +98,10 @@ impl ReverseProxy {
                         Ok(collected) => collected.to_bytes(),
                         Err(e) => {
                             error!("Failed to read response body: {}", e);
-                            return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+                            return Ok(Response::builder()
+                                .status(500)
+                                .body(Body::empty())
+                                .unwrap());
                         }
                     };
                     trace!("Response body collected body_length={}", body_bytes.len());
@@ -117,7 +121,7 @@ impl ReverseProxy {
                     if retries == 0 {
                         error!("Proxy error occurred after all retries err={}", error_msg);
                         return Ok(Response::builder()
-                            .status(StatusCode::BAD_GATEWAY)
+                            .status(502)
                             .body(Body::from(format!(
                                 "Failed to connect to upstream server: {}",
                                 error_msg
@@ -135,20 +139,22 @@ impl ReverseProxy {
     }
 }
 
-async fn handle_request(
-    State(proxy): State<ReverseProxy>,
-    req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
-    proxy.proxy_request(req).await
-}
-
 impl<S> From<ReverseProxy> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
     fn from(proxy: ReverseProxy) -> Self {
-        Router::new()
-            .fallback(handle_request)
-            .with_state(proxy)
+        let path = proxy.path.clone();
+        let proxy_router = Router::new()
+            .fallback(|State(proxy): State<Arc<ReverseProxy>>, req| async move {
+                proxy.proxy_request(req).await
+            })
+            .with_state(Arc::new(proxy));
+
+        if ["", "/"].contains(&path.as_str()) {
+            proxy_router
+        } else {
+            Router::new().nest(&path, proxy_router)
+        }
     }
 }

@@ -19,6 +19,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo check
+      - name: Check examples compilation
+        run: cargo check --examples
 
   test:
     name: Test Suite
@@ -39,6 +41,8 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy -- -D warnings
+      - name: Check benchmarks with clippy
+        run: cargo clippy --benches -- -D warnings
 
   fmt:
     name: Rustfmt
