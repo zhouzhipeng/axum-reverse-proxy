@@ -1,0 +1,68 @@
+name: Benchmark
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "bench-cache"
+
+      - name: Run benchmark
+        run: |
+          # Run benchmarks and save results
+          cargo bench | tee bench_output.txt
+
+      - name: Process benchmark results
+        id: benchmark
+        run: |
+          # Extract and format benchmark results
+          echo 'BENCHMARK_RESULTS<<EOF' >> $GITHUB_ENV
+          echo '### Benchmark Results' >> $GITHUB_ENV
+          echo '```' >> $GITHUB_ENV
+          grep -A1 "time:" bench_output.txt >> $GITHUB_ENV
+          echo '```' >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const benchmarkResults = process.env.BENCHMARK_RESULTS;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: benchmarkResults
+            })
+
+      - name: Create commit comment
+        if: github.event_name == 'push'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const benchmarkResults = process.env.BENCHMARK_RESULTS;
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: benchmarkResults
+            }) 
