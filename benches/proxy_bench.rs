@@ -104,7 +104,7 @@ struct ProxyServer {
 // Helper function to create and verify proxy server
 async fn create_proxy_server(target: String) -> ProxyServer {
     let proxy = ReverseProxy::new(&target);
-    let app = proxy.router();
+    let app: Router = proxy.into();
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = proxy_listener.local_addr().unwrap();
     info!("Proxy server binding to {}", addr);

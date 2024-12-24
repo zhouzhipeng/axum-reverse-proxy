@@ -1,8 +1,8 @@
 use axum::{
     body::Body,
+    extract::State,
     http::{Request, Response, StatusCode},
     response::IntoResponse,
-    routing::any,
     Router,
 };
 use http_body_util::BodyExt;
@@ -11,6 +11,7 @@ use hyper_util::rt::TokioExecutor;
 use std::{convert::Infallible, sync::Arc};
 use tracing::{error, trace};
 
+#[derive(Clone)]
 pub struct ReverseProxy {
     target: String,
     client: Arc<Client<HttpConnector, Body>>,
@@ -132,20 +133,22 @@ impl ReverseProxy {
             }
         }
     }
-
-    pub fn router(self) -> Router {
-        Router::new().fallback(any(move |req| {
-            let proxy = self.clone();
-            async move { proxy.proxy_request(req).await }
-        }))
-    }
 }
 
-impl Clone for ReverseProxy {
-    fn clone(&self) -> Self {
-        Self {
-            target: self.target.clone(),
-            client: Arc::clone(&self.client),
-        }
+async fn handle_request(
+    State(proxy): State<ReverseProxy>,
+    req: Request<Body>,
+) -> Result<Response<Body>, Infallible> {
+    proxy.proxy_request(req).await
+}
+
+impl<S> From<ReverseProxy> for Router<S>
+where
+    S: Send + Sync + Clone + 'static,
+{
+    fn from(proxy: ReverseProxy) -> Self {
+        Router::new()
+            .fallback(handle_request)
+            .with_state(proxy)
     }
 }

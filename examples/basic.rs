@@ -1,4 +1,4 @@
-use axum::serve;
+use axum::{serve, Router};
 use axum_reverse_proxy::ReverseProxy;
 use tokio::net::TcpListener;
 use tracing::{info, Level};
@@ -20,7 +20,7 @@ async fn main() {
     let proxy = ReverseProxy::new("https://httpbin.org");
 
     // Create a router from the proxy
-    let app = proxy.router();
+    let app: Router = proxy.into();
 
     // Create a TCP listener
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
