@@ -1,117 +1,123 @@
 use axum::{
-    Router,
-    routing::any,
-    http::{Request, Uri},
-    response::Response,
     body::Body,
+    http::{HeaderMap, Request, Response, StatusCode},
+    response::IntoResponse,
+    routing::any,
+    Router,
 };
-use bytes::Bytes;
-use hyper_util::{
-    client::legacy::Client,
-    rt::TokioExecutor,
-    client::legacy::connect::HttpConnector,
-};
-use http_body_util::{BodyExt, Full};
-use tracing::{trace, error, instrument};
+use http_body_util::BodyExt;
+use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::rt::TokioExecutor;
+use std::convert::Infallible;
+use tracing::{error, trace};
 
 pub struct ReverseProxy {
-    target_url: Uri,
-    client: Client<HttpConnector, Full<Bytes>>,
+    target: String,
+    client: Client<HttpConnector, Body>,
 }
 
 impl ReverseProxy {
-    #[instrument]
-    pub fn new(target_url: &str) -> Self {
-        trace!(target_url, "Creating new reverse proxy");
-        let target_url = if target_url.ends_with('/') {
-            target_url.to_string()
-        } else {
-            format!("{}/", target_url)
-        };
+    pub fn new(target: &str) -> Self {
+        let mut connector = HttpConnector::new();
+        connector.set_nodelay(true);
+        connector.enforce_http(false);
+
+        let client = Client::builder(TokioExecutor::new())
+            .http2_only(true)
+            .build(connector);
 
         Self {
-            target_url: target_url.parse().expect("Invalid target URL"),
-            client: Client::builder(TokioExecutor::new()).build(HttpConnector::new()),
+            target: target.to_string(),
+            client,
         }
     }
 
-    #[instrument(skip(self, req))]
-    pub async fn proxy_request(
-        &self,
-        req: Request<Body>,
-    ) -> Result<Response, Box<dyn std::error::Error>> {
-        // Extract parts we need before consuming the request
-        let method = req.method().clone();
-        let headers = req.headers().clone();
-        let path_and_query = req.uri().path_and_query()
-            .map(|x| x.as_str())
-            .unwrap_or("");
-            
-        // Remove leading slash if present since target_url already has trailing slash
-        let path_and_query = path_and_query.strip_prefix('/').unwrap_or(path_and_query);
-        let uri = format!("{}{}", self.target_url, path_and_query);
-        trace!(method = ?method, uri = %uri, "Proxying request");
-        trace!(headers = ?headers, "Original headers");
+    async fn proxy_request(&self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
+        trace!("Proxying request method={} uri={}", req.method(), req.uri());
+        trace!("Original headers headers={:?}", req.headers());
 
-        // Convert the request body to bytes
-        let body_bytes = req.into_body().collect().await?.to_bytes();
-        trace!(body_length = body_bytes.len(), "Request body collected");
-        
+        // Collect the request body
+        let (parts, body) = req.into_parts();
+        let body_bytes = match body.collect().await {
+            Ok(collected) => collected.to_bytes(),
+            Err(e) => {
+                error!("Failed to read request body: {}", e);
+                return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+            }
+        };
+        trace!("Request body collected body_length={}", body_bytes.len());
+
         // Build the new request
-        let mut builder = Request::builder()
-            .uri(uri)
-            .method(method);
-            
-        // Copy all headers except host
-        let headers_mut = builder.headers_mut().unwrap();
-        for (key, value) in headers.iter() {
-            if key.as_str().to_lowercase() != "host" {
-                headers_mut.insert(key, value.clone());
+        let mut forward_req = Request::builder()
+            .method(parts.method)
+            .uri(format!(
+                "{}{}",
+                self.target,
+                parts.uri.path_and_query().map(|x| x.as_str()).unwrap_or("")
+            ))
+            .body(Body::from(body_bytes))
+            .unwrap();
+
+        // Forward headers
+        let mut forward_headers = HeaderMap::new();
+        for (key, value) in parts.headers.iter() {
+            if key != "host" {
+                forward_headers.insert(key, value.clone());
             }
         }
-        trace!(forwarded_headers = ?headers_mut, "Forwarding headers");
-        
-        let req = builder.body(Full::new(body_bytes))?;
-
-        // Forward the request and wait for response
-        let response = self.client.request(req).await?;
+        *forward_req.headers_mut() = forward_headers;
         trace!(
-            status = ?response.status(),
-            headers = ?response.headers(),
-            "Received response"
+            "Forwarding headers forwarded_headers={:?}",
+            forward_req.headers()
         );
-        
-        // Convert the response body
-        let (parts, body) = response.into_parts();
-        let body = body.collect().await?.to_bytes();
-        trace!(body_length = body.len(), "Response body collected");
-        Ok(Response::from_parts(parts, Body::from(body)))
+
+        // Send the request
+        match self.client.request(forward_req).await {
+            Ok(res) => {
+                trace!(
+                    "Received response status={} headers={:?} version={:?}",
+                    res.status(),
+                    res.headers(),
+                    res.version()
+                );
+
+                // Convert the response body
+                let (parts, body) = res.into_parts();
+                let body_bytes = match body.collect().await {
+                    Ok(collected) => collected.to_bytes(),
+                    Err(e) => {
+                        error!("Failed to read response body: {}", e);
+                        return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+                    }
+                };
+                trace!("Response body collected body_length={}", body_bytes.len());
+
+                // Build and return the response
+                let mut response = Response::builder()
+                    .status(parts.status)
+                    .body(Body::from(body_bytes))
+                    .unwrap();
+
+                *response.headers_mut() = parts.headers;
+                Ok(response)
+            }
+            Err(e) => {
+                error!("Proxy error occurred err={}", e);
+                Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+            }
+        }
     }
 
     pub fn router(self) -> Router {
         Router::new().fallback(any(move |req| {
             let proxy = self.clone();
-            async move {
-                match proxy.proxy_request(req).await {
-                    Ok(response) => response,
-                    Err(err) => {
-                        error!(%err, "Proxy error occurred");
-                        Response::builder()
-                            .status(500)
-                            .body(Body::from(format!("Proxy error: {}", err)))
-                            .unwrap()
-                    }
-                }
-            }
+            async move { proxy.proxy_request(req).await }
         }))
     }
 }
 
 impl Clone for ReverseProxy {
     fn clone(&self) -> Self {
-        Self {
-            target_url: self.target_url.clone(),
-            client: Client::builder(TokioExecutor::new()).build(HttpConnector::new()),
-        }
+        Self::new(&self.target)
     }
 }
