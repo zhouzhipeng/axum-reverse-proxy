@@ -23,6 +23,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
       
       - name: Check package version
+        if: github.event_name == 'release'
         run: |
           VERSION=$(cargo metadata --format-version=1 | jq -r '.packages[] | select(.name == "axum-reverse-proxy") | .version')
           TAG=${GITHUB_REF#refs/tags/}
