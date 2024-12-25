@@ -1,4 +1,11 @@
-use axum::{extract::State, response::Json, routing::get, Router};
+use axum::{
+    body::Body,
+    extract::State,
+    http::Request,
+    response::Json,
+    routing::get,
+    Router,
+};
 use axum_reverse_proxy::ReverseProxy;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
@@ -234,4 +241,89 @@ async fn test_proxy_multiple_states() {
     proxy_server.abort();
     server1.abort();
     server2.abort();
+}
+
+#[tokio::test]
+async fn test_proxy_query_parameters() {
+    // Create a test server that echoes query parameters
+    let app = Router::new().route(
+        "/echo",
+        get(|req: Request<Body>| async move {
+            let query = req.uri().query().unwrap_or("");
+            Json(json!({ "query": query }))
+        }),
+    );
+
+    let test_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let test_addr = test_listener.local_addr().unwrap();
+    let test_server = tokio::spawn(async move {
+        axum::serve(test_listener, app).await.unwrap();
+    });
+
+    // Create a reverse proxy
+    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let app: Router = proxy.into();
+
+    let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy_addr = proxy_listener.local_addr().unwrap();
+    let proxy_server = tokio::spawn(async move {
+        axum::serve(proxy_listener, app).await.unwrap();
+    });
+
+    // Create a client
+    let client = reqwest::Client::new();
+
+    // Test simple query parameter
+    let response = client
+        .get(format!("http://{}/echo?foo=bar", proxy_addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["query"], "foo=bar");
+
+    // Test multiple query parameters
+    let response = client
+        .get(format!(
+            "http://{}/echo?foo=bar&baz=qux&special=hello%20world",
+            proxy_addr
+        ))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["query"], "foo=bar&baz=qux&special=hello%20world");
+
+    // Test empty query parameter
+    let response = client
+        .get(format!("http://{}/echo?empty=", proxy_addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["query"], "empty=");
+
+    // Test special characters in query parameters
+    let response = client
+        .get(format!(
+            "http://{}/echo?special=%21%40%23%24%25%5E%26",
+            proxy_addr
+        ))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["query"], "special=%21%40%23%24%25%5E%26");
+
+    // Clean up
+    proxy_server.abort();
+    test_server.abort();
 }
