@@ -1,6 +1,6 @@
 # axum-reverse-proxy
 
-[![CI](https://github.com/tomlubenow/rproxy/actions/workflows/ci.yml/badge.svg)](https://github.com/tomlubenow/rproxy/actions/workflows/ci.yml)
+[![CI](https://github.com/tom-lubenow/axum-reverse-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/tom-lubenow/axum-reverse-proxy/actions/workflows/ci.yml)
 
 A flexible and efficient reverse proxy implementation for [Axum](https://github.com/tokio-rs/axum) web applications. This library provides a simple way to forward HTTP requests from your Axum application to upstream servers.
 
