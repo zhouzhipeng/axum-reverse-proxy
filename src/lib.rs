@@ -11,7 +11,7 @@ use tracing::{error, trace};
 pub struct ReverseProxy {
     path: String,
     target: String,
-    client: Arc<Client<HttpConnector, Body>>,
+    client: Client<HttpConnector, Body>,
 }
 
 impl ReverseProxy {
@@ -26,15 +26,20 @@ impl ReverseProxy {
         connector.set_connect_timeout(Some(std::time::Duration::from_secs(10)));
         connector.set_reuse_address(true);
 
-        let client = Arc::new(
-            Client::builder(TokioExecutor::new())
-                .pool_idle_timeout(std::time::Duration::from_secs(60))
-                .pool_max_idle_per_host(32)
-                .retry_canceled_requests(true)
-                .set_host(true)
-                .build(connector),
-        );
+        let client = Client::builder(TokioExecutor::new())
+            .pool_idle_timeout(std::time::Duration::from_secs(60))
+            .pool_max_idle_per_host(32)
+            .retry_canceled_requests(true)
+            .set_host(true)
+            .build(connector);
 
+        Self::new_with_client(path, target, client)
+    }
+
+    pub fn new_with_client<S>(path: S, target: S, client: Client<HttpConnector, Body>) -> Self
+    where
+        S: Into<String>,
+    {
         Self {
             path: path.into(),
             target: target.into(),
