@@ -48,7 +48,7 @@ use hyper_util::{
     client::legacy::{connect::HttpConnector, Client},
     rt::TokioExecutor,
 };
-use std::{convert::Infallible, sync::Arc};
+use std::convert::Infallible;
 use tracing::{error, trace};
 
 /// Configuration options for the reverse proxy
@@ -340,10 +340,10 @@ where
     fn from(proxy: ReverseProxy) -> Self {
         let path = proxy.path.clone();
         let proxy_router = Router::new()
-            .fallback(|State(proxy): State<Arc<ReverseProxy>>, req| async move {
+            .fallback(|State(proxy): State<ReverseProxy>, req| async move {
                 proxy.proxy_request(req).await
             })
-            .with_state(Arc::new(proxy));
+            .with_state(proxy);
 
         if ["", "/"].contains(&path.as_str()) {
             proxy_router
