@@ -44,6 +44,7 @@
 use axum::{body::Body, extract::State, http::Request, response::Response, Router};
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, BodyExt};
+use hyper::StatusCode;
 use hyper_util::{
     client::legacy::{connect::HttpConnector, Client},
     rt::TokioExecutor,
@@ -209,7 +210,10 @@ impl ReverseProxy {
                 Ok(collected) => Some(collected.to_bytes()),
                 Err(e) => {
                     error!("Failed to read request body: {}", e);
-                    return Ok(Response::builder().status(500).body(Body::empty()).unwrap());
+                    return Ok(Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::empty())
+                        .unwrap());
                 }
             };
             trace!(
@@ -273,7 +277,7 @@ impl ReverseProxy {
                             Err(e) => {
                                 error!("Failed to read response body: {}", e);
                                 return Ok(Response::builder()
-                                    .status(500)
+                                    .status(StatusCode::INTERNAL_SERVER_ERROR)
                                     .body(Body::empty())
                                     .unwrap());
                             }
@@ -297,7 +301,7 @@ impl ReverseProxy {
                     if retries == 0 {
                         error!("Proxy error occurred after all retries err={}", error_msg);
                         return Ok(Response::builder()
-                            .status(502)
+                            .status(StatusCode::BAD_GATEWAY)
                             .body(Body::from(format!(
                                 "Failed to connect to upstream server: {}",
                                 error_msg
