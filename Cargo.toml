@@ -2,6 +2,14 @@
 name = "axum-reverse-proxy"
 version = "0.1.0"
 edition = "2021"
+description = "A flexible and efficient reverse proxy implementation for Axum web applications"
+license = "MIT"
+repository = "https://github.com/tom-lubenow/axum-reverse-proxy"
+documentation = "https://docs.rs/axum-reverse-proxy"
+readme = "README.md"
+keywords = ["axum", "proxy", "reverse-proxy", "http", "web"]
+categories = ["web-programming::http-server", "network-programming"]
+authors = ["Tom Lubenow"]
 
 [dependencies]
 axum = "0.7"
