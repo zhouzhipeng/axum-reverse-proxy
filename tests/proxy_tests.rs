@@ -40,7 +40,7 @@ async fn test_proxy_get_request() {
 
     // Send a request through the proxy
     let response = client
-        .get(&format!("http://{}/test", proxy_addr))
+        .get(format!("http://{}/test", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -84,7 +84,7 @@ async fn test_proxy_post_request() {
     // Send a request through the proxy
     let test_body = json!({"message": "Hello, proxy!"});
     let response = client
-        .post(&format!("http://{}/echo", proxy_addr))
+        .post(format!("http://{}/echo", proxy_addr))
         .json(&test_body)
         .send()
         .await
@@ -132,7 +132,7 @@ async fn test_proxy_large_payload() {
 
     // Send a request through the proxy
     let response = client
-        .post(&format!("http://{}/echo", proxy_addr))
+        .post(format!("http://{}/echo", proxy_addr))
         .json(&test_body)
         .send()
         .await
@@ -182,7 +182,7 @@ async fn test_proxy_timeout() {
 
     // Send a request through the proxy
     let response = client
-        .get(&format!("http://{}/delay", proxy_addr))
+        .get(format!("http://{}/delay", proxy_addr))
         .send()
         .await;
 
@@ -226,7 +226,7 @@ async fn test_proxy_http2_support() {
 
     // Send a request through the proxy
     let response = client
-        .get(&format!("http://{}/test", proxy_addr))
+        .get(format!("http://{}/test", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -289,7 +289,7 @@ async fn test_proxy_nested_routing() {
 
     // Test root endpoint with app state
     let response = client
-        .get(&format!("http://{}/", proxy_addr))
+        .get(format!("http://{}/", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -300,7 +300,7 @@ async fn test_proxy_nested_routing() {
 
     // Test proxied endpoint
     let response = client
-        .get(&format!("http://{}/proxy/test", proxy_addr))
+        .get(format!("http://{}/proxy/test", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -344,7 +344,7 @@ async fn test_proxy_path_handling() {
 
     // Test root path
     let response = client
-        .get(&format!("http://{}/", proxy_addr))
+        .get(format!("http://{}/", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -353,7 +353,7 @@ async fn test_proxy_path_handling() {
 
     // Test double slashes
     let response = client
-        .get(&format!("http://{}/test//double", proxy_addr))
+        .get(format!("http://{}/test//double", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -362,7 +362,7 @@ async fn test_proxy_path_handling() {
 
     // Test URL-encoded space
     let response = client
-        .get(&format!("http://{}/test/%20space", proxy_addr))
+        .get(format!("http://{}/test/%20space", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -371,7 +371,7 @@ async fn test_proxy_path_handling() {
 
     // Test special characters
     let response = client
-        .get(&format!("http://{}/test/special!%40%23%24", proxy_addr))
+        .get(format!("http://{}/test/special!%40%23%24", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -402,7 +402,7 @@ async fn test_proxy_error_handling() {
     });
 
     let response = client
-        .get(&format!("http://{}/test", proxy_addr))
+        .get(format!("http://{}/test", proxy_addr))
         .send()
         .await;
 
@@ -476,7 +476,7 @@ async fn test_proxy_header_handling() {
     let test_result = tokio::time::timeout(Duration::from_secs(10), async {
         println!("Sending request to proxy...");
         let response = match client
-            .get(&format!("http://{}/headers", proxy_addr))
+            .get(format!("http://{}/headers", proxy_addr))
             .headers(headers.clone())
             .send()
             .await
@@ -587,7 +587,7 @@ async fn test_proxy_special_headers() {
     let test_result = tokio::time::timeout(Duration::from_secs(10), async {
         println!("Testing special headers...");
         let response = client
-            .get(&format!("http://{}/headers", proxy_addr))
+            .get(format!("http://{}/headers", proxy_addr))
             .header("X-Forwarded-For", "192.168.1.1")
             .header("X-Real-IP", "192.168.1.1")
             .header("X-Request-ID", "test-request-1")
@@ -682,7 +682,7 @@ async fn test_proxy_multiple_states() {
 
     // Test root endpoint with app state
     let response = client
-        .get(&format!("http://{}/", proxy_addr))
+        .get(format!("http://{}/", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -693,7 +693,7 @@ async fn test_proxy_multiple_states() {
 
     // Test first proxy
     let response = client
-        .get(&format!("http://{}/api1/test", proxy_addr))
+        .get(format!("http://{}/api1/test", proxy_addr))
         .send()
         .await
         .unwrap();
@@ -703,7 +703,7 @@ async fn test_proxy_multiple_states() {
 
     // Test second proxy
     let response = client
-        .get(&format!("http://{}/api2/test", proxy_addr))
+        .get(format!("http://{}/api2/test", proxy_addr))
         .send()
         .await
         .unwrap();
