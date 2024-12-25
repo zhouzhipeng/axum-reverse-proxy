@@ -45,14 +45,20 @@ let app: Router = proxy.into();
 You can merge the proxy with your existing Axum router:
 
 ```rust
-use axum::{routing::get, Router};
+use axum::{routing::get, Router, response::IntoResponse, extract::State};
 use axum_reverse_proxy::ReverseProxy;
 
-let proxy = ReverseProxy::new("/api", "https://api.example.com");
+#[derive(Clone)]
+struct AppState { foo: usize }
 
-let app = Router::new()
+async fn root_handler(State(state): State<AppState>) -> impl IntoResponse {
+    (axum::http::StatusCode::OK, format!("Hello, World! {}", state.foo))
+}
+
+let app: Router<AppState> = Router::new()
     .route("/", get(root_handler))
-    .merge(proxy.into());
+    .merge(ReverseProxy::new("/api", "https://httpbin.org"))
+    .with_state(AppState { foo: 42 });
 ```
 
 ### Custom Client Configuration
