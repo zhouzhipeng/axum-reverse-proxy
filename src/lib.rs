@@ -42,8 +42,9 @@
 //! ```
 
 use axum::{body::Body, extract::State, http::Request, response::Response, Router};
-use bytes::Bytes;
-use http_body_util::{combinators::BoxBody, BodyExt};
+use bytes as bytes_crate;
+use http::Version;
+use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::StatusCode;
 use hyper_util::{
     client::legacy::{connect::HttpConnector, Client},
@@ -69,7 +70,10 @@ pub struct ProxyOptions {
 pub struct ReverseProxy {
     path: String,
     target: String,
-    client: Client<HttpConnector, Body>,
+    client: Client<
+        HttpConnector,
+        BoxBody<bytes_crate::Bytes, Box<dyn std::error::Error + Send + Sync>>,
+    >,
     options: ProxyOptions,
 }
 
@@ -95,7 +99,7 @@ impl ReverseProxy {
         Self::new_with_options(path, target, ProxyOptions::default())
     }
 
-    /// Creates a new `ReverseProxy` instance with custom proxy options and a default HTTP client configuration..
+    /// Creates a new `ReverseProxy` instance with custom proxy options and a default HTTP client configuration.
     ///
     /// # Arguments
     ///
@@ -129,13 +133,27 @@ impl ReverseProxy {
             .pool_max_idle_per_host(32)
             .retry_canceled_requests(true)
             .set_host(true)
-            .build(connector);
+            .build::<_, BoxBody<bytes_crate::Bytes, Box<dyn std::error::Error + Send + Sync>>>(
+                connector,
+            );
 
-        Self::new_with_client_and_options(path, target, client, options)
+        Self {
+            path: path.into(),
+            target: target.into(),
+            client,
+            options,
+        }
     }
 
     /// Creates a new `ReverseProxy` instance with a custom HTTP client and default proxy options.
-    pub fn new_with_client<S>(path: S, target: S, client: Client<HttpConnector, Body>) -> Self
+    pub fn new_with_client<S>(
+        path: S,
+        target: S,
+        client: Client<
+            HttpConnector,
+            BoxBody<bytes_crate::Bytes, Box<dyn std::error::Error + Send + Sync>>,
+        >,
+    ) -> Self
     where
         S: Into<String>,
     {
@@ -164,7 +182,8 @@ impl ReverseProxy {
     /// ```rust
     /// use axum_reverse_proxy::{ReverseProxy, ProxyOptions};
     /// use hyper_util::client::legacy::{Client, connect::HttpConnector};
-    /// use axum::body::Body;
+    /// use http_body_util::{combinators::BoxBody, Empty};
+    /// use bytes::Bytes;
     /// use hyper_util::rt::TokioExecutor;
     ///
     /// let client = Client::builder(TokioExecutor::new())
@@ -180,7 +199,10 @@ impl ReverseProxy {
     pub fn new_with_client_and_options<S>(
         path: S,
         target: S,
-        client: Client<HttpConnector, Body>,
+        client: Client<
+            HttpConnector,
+            BoxBody<bytes_crate::Bytes, Box<dyn std::error::Error + Send + Sync>>,
+        >,
         options: ProxyOptions,
     ) -> Self
     where
@@ -194,6 +216,21 @@ impl ReverseProxy {
         }
     }
 
+    /// Helper function to create a BoxBody from bytes
+    fn create_box_body(
+        bytes: bytes_crate::Bytes,
+    ) -> BoxBody<bytes_crate::Bytes, Box<dyn std::error::Error + Send + Sync>> {
+        let full = Full::new(bytes);
+        let mapped = full.map_err(|never: Infallible| match never {});
+        let mapped = mapped.map_err(|_| {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "unreachable",
+            )) as Box<dyn std::error::Error + Send + Sync>
+        });
+        BoxBody::new(mapped)
+    }
+
     /// Handles the proxying of a single request to the upstream server.
     async fn proxy_request(&self, mut req: Request<Body>) -> Result<Response<Body>, Infallible> {
         trace!("Proxying request method={} uri={}", req.method(), req.uri());
@@ -201,7 +238,7 @@ impl ReverseProxy {
 
         let mut retries: u32 = 3;
         let mut error_msg;
-        let mut buffered_body: Option<Bytes> = None;
+        let mut buffered_body: Option<bytes_crate::Bytes> = None;
 
         if self.options.buffer_bodies {
             // If we're in buffered mode, collect the body once at the start
@@ -227,11 +264,14 @@ impl ReverseProxy {
 
         loop {
             let forward_req = {
-                let mut builder = Request::builder().method(req.method().clone()).uri(format!(
-                    "{}{}",
-                    self.target,
-                    req.uri().path_and_query().map(|x| x.as_str()).unwrap_or("")
-                ));
+                let mut builder = Request::builder()
+                    .method(req.method().clone())
+                    .version(Version::HTTP_11)
+                    .uri(format!(
+                        "{}{}",
+                        self.target,
+                        req.uri().path_and_query().map(|x| x.as_str()).unwrap_or("")
+                    ));
 
                 // Forward headers
                 for (key, value) in req.headers() {
@@ -241,16 +281,27 @@ impl ReverseProxy {
                 }
 
                 // Create the request body
-                if self.options.buffer_bodies {
-                    builder
-                        .body(Body::from(buffered_body.as_ref().unwrap().clone()))
-                        .unwrap()
+                let body = if self.options.buffer_bodies {
+                    let bytes = buffered_body
+                        .as_ref()
+                        .unwrap_or(&bytes_crate::Bytes::new())
+                        .clone();
+                    Self::create_box_body(bytes)
                 } else {
-                    // For streaming mode, we take ownership of the body
+                    // For streaming mode, we take ownership of the body and convert it
                     let (parts, body) = req.into_parts();
                     req = Request::from_parts(parts, Body::empty());
-                    builder.body(body).unwrap()
-                }
+
+                    // Convert the axum Body into a BoxBody
+                    let bytes = body
+                        .collect()
+                        .await
+                        .map(|collected| collected.to_bytes())
+                        .unwrap_or_else(|_| bytes_crate::Bytes::new());
+                    Self::create_box_body(bytes)
+                };
+
+                builder.body(body).unwrap()
             };
 
             trace!(
@@ -269,29 +320,18 @@ impl ReverseProxy {
 
                     let (parts, body) = res.into_parts();
 
-                    // Build the response based on buffering mode
-                    let response_body = if self.options.buffer_bodies {
-                        // Buffered mode: collect the entire response
-                        match body.collect().await {
-                            Ok(collected) => Body::from(collected.to_bytes()),
-                            Err(e) => {
-                                error!("Failed to read response body: {}", e);
-                                return Ok(Response::builder()
-                                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                    .body(Body::empty())
-                                    .unwrap());
-                            }
-                        }
-                    } else {
-                        // For streaming mode, convert the incoming body to axum Body
-                        Body::new(BoxBody::new(body))
-                    };
+                    // Convert the response body into a streaming axum Body
+                    let bytes = body
+                        .collect()
+                        .await
+                        .map(|collected| collected.to_bytes())
+                        .unwrap_or_else(|_| bytes_crate::Bytes::new());
+                    let boxed = Self::create_box_body(bytes);
+                    let body = Body::new(boxed);
 
-                    let mut response = Response::builder()
-                        .status(parts.status)
-                        .body(response_body)
-                        .unwrap();
-
+                    let mut response = Response::new(body);
+                    *response.status_mut() = parts.status;
+                    *response.version_mut() = parts.version;
                     *response.headers_mut() = parts.headers;
                     return Ok(response);
                 }
