@@ -13,26 +13,27 @@ authors = ["Tom Lubenow"]
 
 [dependencies]
 axum = { version = "0.7.9", features = ["ws"] }
-hyper = { version = "1.5.2", features = ["full"] }
-hyper-util = { version = "0.1.10", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
-tokio = { version = "1.42.0", features = ["full"] }
-tower = { version = "0.4.13", features = ["full"] }
-tower-http = { version = "0.6.2", features = ["full"] }
-http-body-util = "0.1.2"
+base64 = "0.21.7"
 bytes = "1.5.0"
-tracing = "0.1.40"
-serde_json = "1.0.114"
 futures-util = "0.3.30"
 http = "1.0.0"
-tokio-tungstenite = "0.21.0"
-url = "2.5.0"
-base64 = "0.21.7"
+http-body-util = "0.1.2"
+hyper = { version = "1.5.2", features = ["full"] }
+hyper-util = { version = "0.1.10", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
 sha1 = "0.10.6"
+tokio = { version = "1.42.0", features = ["full"] }
+tokio-tungstenite = "0.21.0"
+tower = { version = "0.4.13", features = ["full"] }
+tracing = "0.1.40"
+url = "2.5.0"
 
 [dev-dependencies]
+criterion = { version = "0.5.1", features = ["async", "futures"] }
 reqwest = { version = "0.11.24", features = ["json"] }
-tracing-subscriber = "0.3.18"
-criterion = { version = "0.5.1", features = ["async", "async_tokio", "html_reports"] }
+serde_json = "1.0.114"
+tokio = { version = "1.42.0", features = ["full", "test-util"] }
+tower-http = { version = "0.6.2", features = ["full"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [[bench]]
 name = "proxy_bench"
@@ -41,3 +42,15 @@ harness = false
 [[bench]]
 name = "websocket_bench"
 harness = false
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "nested"
+path = "examples/nested.rs"
+
+[[example]]
+name = "tower_middleware"
+path = "examples/tower_middleware.rs"
