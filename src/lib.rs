@@ -142,6 +142,9 @@ use tokio_tungstenite::{connect_async, tungstenite::handshake::client::Request a
 use tracing::{error, trace};
 use url::Url;
 
+mod rfc9110;
+pub use rfc9110::{Rfc9110Config, Rfc9110Layer};
+
 /// Configuration options for the reverse proxy
 #[derive(Clone, Debug, Default)]
 pub struct ProxyOptions {
