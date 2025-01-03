@@ -6,6 +6,8 @@
 
 A flexible and efficient reverse proxy implementation for [Axum](https://github.com/tokio-rs/axum) web applications. This library provides a simple way to forward HTTP requests from your Axum application to upstream servers. It is intended to be a simple implementation sitting on top of axum and hyper.
 
+The eventual goal would be to benchmark ourselves against common reverse proxy libraries like nginx, traefix, haproxy, etc. We hope to achieve comparable (or better) performance but with significantly better developer ergonomics, using Rust code to configure the proxy instead of various configuration files with their own DSLs.
+
 ## Features
 
 - 🛣️ Path-based routing
@@ -15,6 +17,7 @@ A flexible and efficient reverse proxy implementation for [Axum](https://github.
 - 🔌 Easy integration with Axum's Router
 - 🧰 Custom client configuration support
 - 🔒 HTTPS support
+- 📋 Optional RFC9110 compliance layer
 
 ## Installation
 
@@ -109,3 +112,34 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## RFC9110 Compliance
+
+The library includes an optional RFC9110 compliance layer that implements key requirements from [RFC9110 (HTTP Semantics)](https://www.rfc-editor.org/rfc/rfc9110.html). To use it:
+
+```rust
+use axum_reverse_proxy::{ReverseProxy, Rfc9110Config, Rfc9110Layer};
+use std::collections::HashSet;
+
+// Create a config for RFC9110 compliance
+let mut server_names = HashSet::new();
+server_names.insert("example.com".to_string());
+
+let config = Rfc9110Config {
+    server_names: Some(server_names),  // For loop detection
+    pseudonym: Some("myproxy".to_string()),  // For Via headers
+    combine_via: true,  // Combine Via headers with same protocol
+};
+
+// Create a proxy with RFC9110 compliance
+let proxy = ReverseProxy::new("/api", "https://api.example.com")
+    .layer(Rfc9110Layer::with_config(config));
+```
+
+The RFC9110 layer provides:
+
+- **Connection Header Processing**: Properly handles Connection headers and removes hop-by-hop headers
+- **Via Header Management**: Adds and combines Via headers according to spec, with optional firewall mode
+- **Max-Forwards Processing**: Handles Max-Forwards header for TRACE/OPTIONS methods
+- **Loop Detection**: Detects request loops using Via headers and server names
+- **End-to-end Header Preservation**: Preserves end-to-end headers while removing hop-by-hop headers

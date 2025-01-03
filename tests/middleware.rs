@@ -91,7 +91,7 @@ async fn test_proxy_with_middleware() {
     let has_custom_header = headers.iter().any(|h| {
         h.as_array()
             .unwrap()
-            .get(0)
+            .first()
             .unwrap()
             .as_str()
             .unwrap()
