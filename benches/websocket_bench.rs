@@ -9,6 +9,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use futures_util::{SinkExt, StreamExt};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
+use tokio::runtime::Runtime;
 use tokio_tungstenite::tungstenite;
 use tracing::error;
 
@@ -100,39 +101,54 @@ async fn bench_websocket_echo(
 }
 
 fn websocket_benchmark(c: &mut Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
 
     // Set up the test server
     let (_upstream_addr, proxy_addr) = rt.block_on(setup_test_server());
 
     // Benchmark different message sizes
     let message_sizes = [10, 100, 1000, 10000];
+    let mut group = c.benchmark_group("websocket_echo");
     for size in message_sizes {
-        let bench_name = format!("websocket_echo_{}_bytes", size);
-        c.bench_function(&bench_name, |b| {
-            b.to_async(&rt)
-                .iter(|| bench_websocket_echo(proxy_addr, size, 100));
-        });
-    }
-
-    // Benchmark concurrent connections with smaller iteration counts
-    let concurrent_counts = [1, 5, 10, 20];
-    for count in concurrent_counts {
-        let bench_name = format!("websocket_concurrent_{}_connections", count);
-        c.bench_function(&bench_name, |b| {
-            b.to_async(&rt).iter(|| async {
-                let mut handles = Vec::new();
-                for _ in 0..count {
-                    handles.push(tokio::spawn(bench_websocket_echo(proxy_addr, 100, 5)));
-                }
-                for handle in handles {
-                    if let Err(e) = handle.await.unwrap() {
-                        error!("Benchmark error: {}", e);
+        group.bench_function(format!("{}_bytes", size), |b| {
+            b.iter_custom(|iters| {
+                rt.block_on(async {
+                    let start = std::time::Instant::now();
+                    for _ in 0..iters {
+                        bench_websocket_echo(proxy_addr, size, 100).await.unwrap();
                     }
-                }
+                    start.elapsed()
+                })
             });
         });
     }
+    group.finish();
+
+    // Benchmark concurrent connections with smaller iteration counts
+    let concurrent_counts = [1, 5, 10, 20];
+    let mut group = c.benchmark_group("websocket_concurrent");
+    for count in concurrent_counts {
+        group.bench_function(format!("{}_connections", count), |b| {
+            b.iter_custom(|iters| {
+                rt.block_on(async {
+                    let start = std::time::Instant::now();
+                    for _ in 0..iters {
+                        let mut handles = Vec::new();
+                        for _ in 0..count {
+                            handles.push(tokio::spawn(bench_websocket_echo(proxy_addr, 100, 5)));
+                        }
+                        for handle in handles {
+                            if let Err(e) = handle.await.unwrap() {
+                                error!("Benchmark error: {}", e);
+                            }
+                        }
+                    }
+                    start.elapsed()
+                })
+            });
+        });
+    }
+    group.finish();
 }
 
 criterion_group!(benches, websocket_benchmark);

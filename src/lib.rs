@@ -14,8 +14,9 @@
 //!   - Text and binary message support
 //!   - Proper close frame handling
 //! - Easy integration with Axum's Router
+//! - Full Tower middleware support
 //!
-//! # Example
+//! # Basic Example
 //!
 //! ```rust
 //! use axum::Router;
@@ -28,7 +29,61 @@
 //! let app: Router = proxy.into();
 //! ```
 //!
-//! You can also merge the proxy with an existing router, compatible with arbitrary state:
+//! # Using Tower Middleware
+//!
+//! The proxy integrates seamlessly with Tower middleware, allowing you to transform requests
+//! and responses, add authentication, logging, timeouts, and more:
+//!
+//! ```rust
+//! use axum::{body::Body, Router};
+//! use axum_reverse_proxy::ReverseProxy;
+//! use http::Request;
+//! use tower::ServiceBuilder;
+//! use tower_http::{
+//!     timeout::TimeoutLayer,
+//!     validate_request::ValidateRequestHeaderLayer,
+//! };
+//! use std::time::Duration;
+//!
+//! // Create a reverse proxy
+//! let proxy = ReverseProxy::new("/api", "https://api.example.com");
+//!
+//! // Convert to router
+//! let proxy_router: Router = proxy.into();
+//!
+//! // Add middleware layers
+//! let app = proxy_router.layer(
+//!     ServiceBuilder::new()
+//!         // Add request timeout
+//!         .layer(TimeoutLayer::new(Duration::from_secs(10)))
+//!         // Require API key
+//!         .layer(ValidateRequestHeaderLayer::bearer("secret-token"))
+//!         // Transform requests
+//!         .map_request(|mut req: Request<Body>| {
+//!             req.headers_mut().insert(
+//!                 "X-Custom-Header",
+//!                 "custom-value".parse().unwrap(),
+//!             );
+//!             req
+//!         })
+//! );
+//! ```
+//!
+//! Common middleware use cases include:
+//! - Request/response transformation
+//! - Authentication and authorization
+//! - Rate limiting
+//! - Request validation
+//! - Logging and tracing
+//! - Timeouts and retries
+//! - Caching
+//! - Compression
+//!
+//! See the `tower_middleware` example for a complete working example.
+//!
+//! # State Management
+//!
+//! You can merge the proxy with an existing router that has state:
 //!
 //! ```rust
 //! use axum::{routing::get, Router, response::IntoResponse, extract::State};
