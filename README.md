@@ -21,12 +21,7 @@ The eventual goal would be to benchmark ourselves against common reverse proxy l
 
 ## Installation
 
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-axum-reverse-proxy = "0.1.0"
-```
+Run `cargo add axum-reverse-proxy` to add the library to your project.
 
 ## Quick Start
 
