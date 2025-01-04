@@ -1,6 +1,6 @@
 [package]
 name = "axum-reverse-proxy"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "A flexible and efficient reverse proxy implementation for Axum web applications"
 license = "MIT"
@@ -12,28 +12,28 @@ categories = ["web-programming::http-server", "network-programming"]
 authors = ["Tom Lubenow"]
 
 [dependencies]
-axum = { version = "0.7.9", features = ["ws"] }
-base64 = "0.21.7"
-bytes = "1.5.0"
-futures-util = "0.3.30"
-http = "1.0.0"
+axum = { version = "0.8.1", features = ["ws"] }
+base64 = "0.22.1"
+bytes = "1.9.0"
+futures-util = "0.3.31"
+http = "1.2.0"
 http-body-util = "0.1.2"
 hyper = { version = "1.5.2", features = ["full"] }
 hyper-util = { version = "0.1.10", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
 sha1 = "0.10.6"
 tokio = { version = "1.42.0", features = ["full"] }
-tokio-tungstenite = "0.21.0"
-tower = { version = "0.4.13", features = ["full"] }
-tracing = "0.1.40"
-url = "2.5.0"
+tokio-tungstenite = "0.26.1"
+tower = { version = "0.5.2", features = ["full"] }
+tracing = "0.1.41"
+url = "2.5.4"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["async", "futures"] }
-reqwest = { version = "0.11.24", features = ["json"] }
-serde_json = "1.0.114"
+reqwest = { version = "0.12.12", features = ["json"] }
+serde_json = "1.0.134"
 tokio = { version = "1.42.0", features = ["full", "test-util"] }
 tower-http = { version = "0.6.2", features = ["full"] }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [[bench]]
 name = "proxy_bench"

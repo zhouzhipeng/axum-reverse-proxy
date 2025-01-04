@@ -229,12 +229,7 @@ impl ReverseProxy {
                 connector,
             );
 
-        Self {
-            path: path.into(),
-            target: target.into(),
-            client,
-            options,
-        }
+        Self::new_with_client_and_options(path, target, client, options)
     }
 
     /// Creates a new `ReverseProxy` instance with a custom HTTP client and default proxy options.
@@ -249,12 +244,7 @@ impl ReverseProxy {
     where
         S: Into<String>,
     {
-        Self {
-            path: path.into(),
-            target: target.into(),
-            client,
-            options: ProxyOptions::default(),
-        }
+        Self::new_with_client_and_options(path, target, client, ProxyOptions::default())
     }
 
     /// Creates a new `ReverseProxy` instance with a custom HTTP client and options.
