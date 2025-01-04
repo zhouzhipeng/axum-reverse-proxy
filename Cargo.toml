@@ -1,6 +1,6 @@
 [package]
 name = "axum-reverse-proxy"
-version = "0.4.1"
+version = "0.5.1"
 edition = "2021"
 description = "A flexible and efficient reverse proxy implementation for Axum web applications"
 license = "MIT"
