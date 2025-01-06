@@ -21,8 +21,7 @@ spec:
     spec:
       containers:
       - name: backend
-        # Simple echo server that responds with request info
-        image: mendhak/http-https-echo:31
+        image: gcr.io/axum-proxy-benchmarks/backend:latest
         ports:
         - containerPort: 8080
         resources:
