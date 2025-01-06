@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: axum-benchmarks
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-service
+  namespace: axum-benchmarks
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend-service
+  template:
+    metadata:
+      labels:
+        app: backend-service
+    spec:
+      containers:
+      - name: backend
+        # Simple echo server that responds with request info
+        image: mendhak/http-https-echo:31
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: axum-benchmarks
+spec:
+  selector:
+    app: backend-service
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: ClusterIP 
