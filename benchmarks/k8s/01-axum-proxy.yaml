@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: axum-proxy
+  namespace: axum-benchmarks
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: axum-proxy
+  template:
+    metadata:
+      labels:
+        app: axum-proxy
+    spec:
+      containers:
+      - name: proxy
+        image: gcr.io/axum-proxy-benchmarks/axum-proxy:latest  # We'll update this with our GCR image
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PROXY_PATH
+          value: "/"
+        - name: PROXY_TARGET
+          value: "http://backend-service:8080"
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: axum-proxy
+  namespace: axum-benchmarks
+spec:
+  selector:
+    app: axum-proxy
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: LoadBalancer 

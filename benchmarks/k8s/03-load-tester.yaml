@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: load-tester
+  namespace: axum-benchmarks
+spec:
+  containers:
+  - name: wrk2
+    image: debian:bookworm-slim
+    command: ["/bin/bash", "-c", "--"]
+    args: ["apt-get update && apt-get install -y wrk && sleep infinity"]
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "512Mi"
+      limits:
+        cpu: "2000m"
+        memory: "1Gi" 
