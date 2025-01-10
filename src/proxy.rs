@@ -1,5 +1,5 @@
 use axum::body::Body;
-use http::{StatusCode, Version};
+use http::StatusCode;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use std::convert::Infallible;
@@ -135,7 +135,6 @@ impl ReverseProxy {
             let forward_req = {
                 let mut builder = axum::http::Request::builder()
                     .method(req.method().clone())
-                    .version(Version::HTTP_11)
                     .uri(format!(
                         "{}{}",
                         self.target,
