@@ -135,7 +135,6 @@ impl ReverseProxy {
             let forward_req = {
                 let mut builder = axum::http::Request::builder()
                     .method(req.method().clone())
-                    .version(Version::HTTP_11)
                     .uri(format!(
                         "{}{}",
                         self.target,
