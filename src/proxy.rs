@@ -1,5 +1,5 @@
 use axum::body::Body;
-use http::{StatusCode, Version};
+use http::StatusCode;
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use std::convert::Infallible;
