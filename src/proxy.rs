@@ -1,5 +1,4 @@
 use axum::body::Body;
-use bytes as bytes_crate;
 use http::{StatusCode, Version};
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::{connect::HttpConnector, Client};
@@ -7,14 +6,6 @@ use std::convert::Infallible;
 use tracing::{error, trace};
 
 use crate::websocket;
-
-/// Configuration options for the reverse proxy
-#[derive(Clone, Debug, Default)]
-pub struct ProxyOptions {
-    /// Whether to buffer the entire request/response bodies in memory
-    /// If false (default), requests and responses will be streamed
-    pub buffer_bodies: bool,
-}
 
 /// A reverse proxy that forwards HTTP requests to an upstream server.
 ///
@@ -26,11 +17,10 @@ pub struct ReverseProxy {
     path: String,
     target: String,
     client: Client<HttpConnector, Body>,
-    options: ProxyOptions,
 }
 
 impl ReverseProxy {
-    /// Creates a new `ReverseProxy` instance with default options.
+    /// Creates a new `ReverseProxy` instance.
     ///
     /// # Arguments
     ///
@@ -48,31 +38,6 @@ impl ReverseProxy {
     where
         S: Into<String>,
     {
-        Self::new_with_options(path, target, ProxyOptions::default())
-    }
-
-    /// Creates a new `ReverseProxy` instance with custom proxy options and a default HTTP client configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The base path to match incoming requests against
-    /// * `target` - The upstream server URL to forward requests to
-    /// * `options` - Custom configuration options for the proxy
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use axum_reverse_proxy::{ReverseProxy, ProxyOptions};
-    ///
-    /// let options = ProxyOptions {
-    ///     buffer_bodies: true,
-    /// };
-    /// let proxy = ReverseProxy::new_with_options("/api", "https://api.example.com", options);
-    /// ```
-    pub fn new_with_options<S>(path: S, target: S, options: ProxyOptions) -> Self
-    where
-        S: Into<String>,
-    {
         let mut connector = HttpConnector::new();
         connector.set_nodelay(true);
         connector.enforce_http(false);
@@ -87,18 +52,10 @@ impl ReverseProxy {
             .set_host(true)
             .build(connector);
 
-        Self::new_with_client_and_options(path, target, client, options)
+        Self::new_with_client(path, target, client)
     }
 
-    /// Creates a new `ReverseProxy` instance with a custom HTTP client and default proxy options.
-    pub fn new_with_client<S>(path: S, target: S, client: Client<HttpConnector, Body>) -> Self
-    where
-        S: Into<String>,
-    {
-        Self::new_with_client_and_options(path, target, client, ProxyOptions::default())
-    }
-
-    /// Creates a new `ReverseProxy` instance with a custom HTTP client and options.
+    /// Creates a new `ReverseProxy` instance with a custom HTTP client.
     ///
     /// This method allows for more fine-grained control over the proxy behavior by accepting
     /// a pre-configured HTTP client.
@@ -108,12 +65,11 @@ impl ReverseProxy {
     /// * `path` - The base path to match incoming requests against
     /// * `target` - The upstream server URL to forward requests to
     /// * `client` - A custom-configured HTTP client
-    /// * `options` - Custom configuration options for the proxy
     ///
     /// # Example
     ///
     /// ```rust
-    /// use axum_reverse_proxy::{ReverseProxy, ProxyOptions};
+    /// use axum_reverse_proxy::ReverseProxy;
     /// use hyper_util::client::legacy::{Client, connect::HttpConnector};
     /// use axum::body::Body;
     /// use hyper_util::rt::TokioExecutor;
@@ -128,12 +84,7 @@ impl ReverseProxy {
     ///     client,
     /// );
     /// ```
-    pub fn new_with_client_and_options<S>(
-        path: S,
-        target: S,
-        client: Client<HttpConnector, Body>,
-        options: ProxyOptions,
-    ) -> Self
+    pub fn new_with_client<S>(path: S, target: S, client: Client<HttpConnector, Body>) -> Self
     where
         S: Into<String>,
     {
@@ -141,7 +92,6 @@ impl ReverseProxy {
             path: path.into(),
             target: target.into(),
             client,
-            options,
         }
     }
 
@@ -180,32 +130,6 @@ impl ReverseProxy {
 
         let mut retries: u32 = 3;
         let mut error_msg;
-        let mut buffered_body: Option<bytes_crate::Bytes> = None;
-
-        if self.options.buffer_bodies {
-            // If we're in buffered mode, collect the body once at the start
-            let (parts, body) = req.into_parts();
-            buffered_body = match body.collect().await {
-                Ok(collected) => Some(collected.to_bytes()),
-                Err(e) => {
-                    error!("Failed to read request body: {}", e);
-                    return Ok(axum::http::Response::builder()
-                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Body::empty())
-                        .unwrap());
-                }
-            };
-            trace!(
-                "Request body collected body_length={}",
-                buffered_body.as_ref().unwrap().len()
-            );
-
-            // Reconstruct the request with the buffered body
-            req = axum::http::Request::from_parts(
-                parts,
-                Body::from(buffered_body.as_ref().unwrap().clone()),
-            );
-        }
 
         loop {
             let forward_req = {
@@ -225,17 +149,9 @@ impl ReverseProxy {
                     }
                 }
 
-                // Create the request body
-                let body = if self.options.buffer_bodies {
-                    // Only buffer if explicitly requested
-                    Body::from(buffered_body.as_ref().unwrap().clone())
-                } else {
-                    // For streaming mode, simply take the body as is
-                    let (parts, body) = req.into_parts();
-                    req = axum::http::Request::from_parts(parts, Body::empty());
-                    body
-                };
-
+                // Take the request body
+                let (parts, body) = req.into_parts();
+                req = axum::http::Request::from_parts(parts, Body::empty());
                 builder.body(body).unwrap()
             };
 
@@ -254,19 +170,7 @@ impl ReverseProxy {
                     );
 
                     let (parts, body) = res.into_parts();
-
-                    // Convert the response body
-                    let body = if self.options.buffer_bodies {
-                        // Only buffer if explicitly requested
-                        let bytes = body
-                            .collect()
-                            .await
-                            .map(|collected| collected.to_bytes())
-                            .unwrap_or_else(|_| bytes_crate::Bytes::new());
-                        Body::from(bytes)
-                    } else {
-                        Body::from_stream(body.into_data_stream())
-                    };
+                    let body = Body::from_stream(body.into_data_stream());
 
                     let mut response = axum::http::Response::new(body);
                     *response.status_mut() = parts.status;

@@ -78,6 +78,7 @@
 //! - Timeouts and retries
 //! - Caching
 //! - Compression
+//! - Request buffering (via tower-buffer)
 //!
 //! See the `tower_middleware` example for a complete working example.
 //!
@@ -130,5 +131,5 @@ mod rfc9110;
 mod router;
 mod websocket;
 
-pub use proxy::{ProxyOptions, ReverseProxy};
+pub use proxy::ReverseProxy;
 pub use rfc9110::{Rfc9110Config, Rfc9110Layer};
