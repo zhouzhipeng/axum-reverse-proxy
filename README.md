@@ -18,6 +18,7 @@ The eventual goal would be to benchmark ourselves against common reverse proxy l
 - 🧰 Custom client configuration support
 - 🔒 HTTPS support
 - 📋 Optional RFC9110 compliance layer
+- 🔧 Full Tower middleware support
 
 ## Installation
 
@@ -39,6 +40,34 @@ let app: Router = proxy.into();
 ```
 
 ## Advanced Usage
+
+### Using Tower Middleware
+
+The proxy integrates seamlessly with Tower middleware. Common use cases include:
+
+- Authentication and authorization
+- Rate limiting
+- Request validation
+- Logging and tracing
+- Timeouts and retries
+- Caching
+- Compression
+- Request buffering (via tower-buffer)
+
+Example using tower-buffer for request buffering:
+
+```rust
+use axum::Router;
+use axum_reverse_proxy::ReverseProxy;
+use tower::ServiceBuilder;
+use tower_buffer::BufferLayer;
+
+let proxy = ReverseProxy::new("/api", "https://api.example.com");
+let app: Router = proxy.into();
+
+// Add buffering middleware
+let app = app.layer(ServiceBuilder::new().layer(BufferLayer::new(100)));
+```
 
 ### Merging with Existing Router
 
@@ -91,7 +120,6 @@ The RFC9110 layer provides:
 - **Max-Forwards Processing**: Handles Max-Forwards header for TRACE/OPTIONS methods
 - **Loop Detection**: Detects request loops using Via headers and server names
 - **End-to-end Header Preservation**: Preserves end-to-end headers while removing hop-by-hop headers
-
 
 ### Custom Client Configuration
 

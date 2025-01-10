@@ -157,14 +157,14 @@ async fn test_websocket_binary() {
     // Send a binary message
     let test_data = vec![1, 2, 3, 4, 5];
     ws_stream
-        .send(tungstenite::Message::Binary(test_data.clone().into()))
+        .send(tungstenite::Message::Binary(test_data.clone()))
         .await
         .expect("Failed to send binary message");
 
     // Receive the echo response
     if let Some(msg) = ws_stream.next().await {
         let msg = msg.expect("Failed to get message");
-        assert_eq!(msg, tungstenite::Message::Binary(test_data.into()));
+        assert_eq!(msg, tungstenite::Message::Binary(test_data));
     } else {
         panic!("Did not receive response");
     }
