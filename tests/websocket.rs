@@ -9,7 +9,7 @@ use futures_util::{SinkExt, StreamExt};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite;
-use tracing::info;
+use tracing::{debug, info};
 use tracing_subscriber::fmt::format::FmtSpan;
 
 async fn websocket_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
@@ -43,7 +43,7 @@ async fn handle_socket(mut socket: WebSocket) {
     }
 }
 
-async fn setup_test_server() -> (SocketAddr, SocketAddr) {
+async fn setup_test_server(target_prefix: &str) -> (SocketAddr, SocketAddr) {
     // Set up logging for tests
     tracing_subscriber::fmt()
         .with_span_events(FmtSpan::CLOSE)
@@ -62,7 +62,7 @@ async fn setup_test_server() -> (SocketAddr, SocketAddr) {
     });
 
     // Create the proxy server
-    let proxy = ReverseProxy::new("/", &format!("http://{}", upstream_addr));
+    let proxy = ReverseProxy::new("/", &format!("{}{}", target_prefix, upstream_addr));
     let proxy_app: Router = proxy.into();
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_addr = proxy_listener.local_addr().unwrap();
@@ -77,7 +77,7 @@ async fn setup_test_server() -> (SocketAddr, SocketAddr) {
 
 #[tokio::test]
 async fn test_websocket_upgrade() {
-    let (_upstream_addr, proxy_addr) = setup_test_server().await;
+    let (_upstream_addr, proxy_addr) = setup_test_server("http://").await;
 
     // Attempt WebSocket upgrade through the proxy
     let url = format!("ws://127.0.0.1:{}/ws", proxy_addr.port());
@@ -90,7 +90,7 @@ async fn test_websocket_upgrade() {
 
 #[tokio::test]
 async fn test_websocket_echo() {
-    let (_upstream_addr, proxy_addr) = setup_test_server().await;
+    let (_upstream_addr, proxy_addr) = setup_test_server("http://").await;
 
     // Create a WebSocket client connection through the proxy
     let url = format!("ws://127.0.0.1:{}/ws", proxy_addr.port());
@@ -116,7 +116,7 @@ async fn test_websocket_echo() {
 
 #[tokio::test]
 async fn test_websocket_close() {
-    let (_upstream_addr, proxy_addr) = setup_test_server().await;
+    let (_upstream_addr, proxy_addr) = setup_test_server("http://").await;
 
     // Create a WebSocket client connection through the proxy
     let url = format!("ws://127.0.0.1:{}/ws", proxy_addr.port());
@@ -145,8 +145,81 @@ async fn test_websocket_close() {
 }
 
 #[tokio::test]
+async fn test_websocket_with_complex_connection_header() {
+    let (_upstream_addr, proxy_addr) = setup_test_server("http://").await;
+
+    // Create a WebSocket client with a complex Connection header
+    let url = format!("ws://127.0.0.1:{}/ws", proxy_addr.port());
+    let url_parsed = url::Url::parse(&url).unwrap();
+    let host = url_parsed.host_str().unwrap();
+    let port = url_parsed.port().unwrap_or(80);
+    let host_header = if port == 80 {
+        host.to_string()
+    } else {
+        format!("{}:{}", host, port)
+    };
+
+    let request = tokio_tungstenite::tungstenite::handshake::client::Request::builder()
+        .uri(url)
+        .header("Host", host_header)
+        .header("Connection", "keep-alive, Upgrade")
+        .header("Upgrade", "websocket")
+        .header("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+        .header("Sec-WebSocket-Version", "13")
+        .body(())
+        .unwrap();
+
+    let (ws_stream, _) = tokio_tungstenite::connect_async(request)
+        .await
+        .expect("Failed to connect with complex Connection header");
+
+    debug!("Successfully connected with complex Connection header");
+    drop(ws_stream);
+}
+
+#[tokio::test]
+async fn test_websocket_with_https() {
+    let (_upstream_addr, proxy_addr) = setup_test_server("https://").await;
+
+    let url = format!("ws://127.0.0.1:{}/ws", proxy_addr.port());
+    let (ws_stream, _) = tokio_tungstenite::connect_async(&url)
+        .await
+        .expect("Failed to connect with HTTPS upstream");
+
+    debug!("Successfully connected to HTTPS upstream");
+    drop(ws_stream);
+}
+
+#[tokio::test]
+async fn test_websocket_with_explicit_ws() {
+    let (_upstream_addr, proxy_addr) = setup_test_server("ws://").await;
+
+    let url = format!("ws://127.0.0.1:{}/ws", proxy_addr.port());
+    let (ws_stream, _) = tokio_tungstenite::connect_async(&url)
+        .await
+        .expect("Failed to connect with explicit WS upstream");
+
+    debug!("Successfully connected with explicit WS upstream");
+    drop(ws_stream);
+}
+
+#[tokio::test]
+async fn test_websocket_with_trailing_slash() {
+    let (_upstream_addr, proxy_addr) = setup_test_server("http://").await;
+
+    // Test with a path that includes a trailing slash
+    let url = format!("ws://127.0.0.1:{}/ws/", proxy_addr.port());
+    let (ws_stream, _) = tokio_tungstenite::connect_async(&url)
+        .await
+        .expect("Failed to connect with trailing slash");
+
+    debug!("Successfully connected with trailing slash");
+    drop(ws_stream);
+}
+
+#[tokio::test]
 async fn test_websocket_binary() {
-    let (_upstream_addr, proxy_addr) = setup_test_server().await;
+    let (_upstream_addr, proxy_addr) = setup_test_server("http://").await;
 
     // Create a WebSocket client connection through the proxy
     let url = format!("ws://127.0.0.1:{}/ws", proxy_addr.port());

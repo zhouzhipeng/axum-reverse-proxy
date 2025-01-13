@@ -135,11 +135,11 @@ impl ReverseProxy {
             let forward_req = {
                 let mut builder = axum::http::Request::builder()
                     .method(req.method().clone())
-                    .uri(format!(
-                        "{}{}",
-                        self.target,
-                        req.uri().path_and_query().map(|x| x.as_str()).unwrap_or("")
-                    ));
+                    .uri({
+                        let target = self.target.trim_end_matches('/');
+                        let path = req.uri().path_and_query().map(|x| x.as_str()).unwrap_or("");
+                        format!("{}{}", target, path)
+                    });
 
                 // Forward headers
                 for (key, value) in req.headers() {
