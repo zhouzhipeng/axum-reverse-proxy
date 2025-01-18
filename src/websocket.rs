@@ -31,12 +31,17 @@ pub(crate) fn is_websocket_upgrade(headers: &HeaderMap<HeaderValue>) -> bool {
     let has_connection = headers
         .get("connection")
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.eq_ignore_ascii_case("upgrade"))
+        .map(|v| {
+            v.to_ascii_lowercase()
+                .split(',')
+                .any(|part| part.trim() == "upgrade")
+        })
         .unwrap_or(false);
 
     let has_websocket_key = headers.contains_key("sec-websocket-key");
     let has_websocket_version = headers.contains_key("sec-websocket-version");
 
+    trace!("is_websocket_upgrade - upgrade: {has_upgrade}, connection: {has_connection}, websocket key: {has_websocket_key}, websocket version: {has_websocket_version}");
     has_upgrade && has_connection && has_websocket_key && has_websocket_version
 }
 
@@ -73,12 +78,17 @@ pub(crate) async fn handle_websocket(
 
     trace!("Original path: {}", path_and_query);
 
-    // Create upstream WebSocket request
-    let upstream_url = format!(
-        "ws://{}{}",
-        target.trim_start_matches("http://"),
-        path_and_query
-    );
+    // Convert the target URL to WebSocket URL
+    let upstream_url = if target.starts_with("ws://") || target.starts_with("wss://") {
+        format!("{}{}", target, path_and_query)
+    } else {
+        let (scheme, rest) = if target.starts_with("https://") {
+            ("wss://", target.trim_start_matches("https://"))
+        } else {
+            ("ws://", target.trim_start_matches("http://"))
+        };
+        format!("{}{}{}", scheme, rest.trim_end_matches('/'), path_and_query)
+    };
 
     trace!("Connecting to upstream WebSocket at {}", upstream_url);
 
