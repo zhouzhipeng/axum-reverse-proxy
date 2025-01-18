@@ -135,11 +135,9 @@ impl ReverseProxy {
             let forward_req = {
                 let mut builder = axum::http::Request::builder()
                     .method(req.method().clone())
-                    .uri({
-                        let target = self.target.trim_end_matches('/');
-                        let path = req.uri().path_and_query().map(|x| x.as_str()).unwrap_or("");
-                        format!("{}{}", target, path)
-                    });
+                    .uri(self.transform_uri(
+                        req.uri().path_and_query().map(|x| x.as_str()).unwrap_or(""),
+                    ));
 
                 // Forward headers
                 for (key, value) in req.headers() {
@@ -197,6 +195,23 @@ impl ReverseProxy {
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 }
             }
+        }
+    }
+
+    /// Transform an incoming request path into the target URI
+    fn transform_uri(&self, path: &str) -> String {
+        let target = self.target.trim_end_matches('/');
+        let base_path = self.path.trim_end_matches('/');
+
+        // Handle root path specially
+        if path == "/" && !self.path.is_empty() {
+            // When accessing the root of a proxy path, don't add a trailing slash
+            target.to_string()
+        } else if path.starts_with(&self.path) {
+            let remaining = &path[base_path.len()..];
+            format!("{}{}", target, remaining)
+        } else {
+            format!("{}{}", target, path)
         }
     }
 }

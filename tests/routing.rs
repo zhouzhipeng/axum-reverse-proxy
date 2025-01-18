@@ -2,6 +2,7 @@ use axum::{body::Body, extract::State, http::Request, response::Json, routing::g
 use axum_reverse_proxy::ReverseProxy;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::test]
 async fn test_proxy_nested_routing() {
@@ -238,14 +239,20 @@ async fn test_proxy_multiple_states() {
 
 #[tokio::test]
 async fn test_proxy_exact_path_handling() {
+    // Initialize tracing for this test
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_test_writer()
+        .try_init();
+
     // Create a test server that echoes the exact path it receives
-    let app = Router::new().route(
-        "/*path",
-        get(|req: Request<Body>| async move {
-            let path = req.uri().path();
-            Json(json!({ "received_path": path }))
-        }),
-    );
+    let echo_handler = get(|req: Request<Body>| async move {
+        let path = req.uri().path();
+        Json(json!({ "received_path": path }))
+    });
+    let app = Router::new()
+        .route("/", echo_handler.clone())
+        .route("/*path", echo_handler);
 
     let test_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let test_addr = test_listener.local_addr().unwrap();
@@ -254,8 +261,16 @@ async fn test_proxy_exact_path_handling() {
     });
 
     // Create a reverse proxy that maps /api to the test server
-    let proxy = ReverseProxy::new("/api", &format!("http://{}", test_addr));
-    let app: Router = proxy.into();
+    let app: Router = Router::new()
+        .merge(ReverseProxy::new("/api", &format!("http://{}", test_addr)))
+        .merge(ReverseProxy::new(
+            "/_test",
+            &format!("http://{}/_test", test_addr),
+        ))
+        .merge(ReverseProxy::new(
+            "/foo",
+            &format!("http://{}/bar", test_addr),
+        ));
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_addr = proxy_listener.local_addr().unwrap();
@@ -275,7 +290,7 @@ async fn test_proxy_exact_path_handling() {
 
     assert_eq!(response.status().as_u16(), 200);
     let body: Value = response.json().await.unwrap();
-    assert_eq!(body["received_path"], "/_test");
+    assert_eq!(body["received_path"], "/_test".to_string());
 
     // Test with trailing slash to ensure it's preserved
     let response = client
@@ -287,6 +302,28 @@ async fn test_proxy_exact_path_handling() {
     assert_eq!(response.status().as_u16(), 200);
     let body: Value = response.json().await.unwrap();
     assert_eq!(body["received_path"], "/_test/");
+
+    // Test without trailing slash at base path segment
+    let response = client
+        .get(format!("http://{}/_test", proxy_addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["received_path"], "/_test".to_string());
+
+    // Test without trailing slash at base path segment
+    let response = client
+        .get(format!("http://{}/foo", proxy_addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["received_path"], "/bar".to_string());
 
     // Clean up
     proxy_server.abort();
