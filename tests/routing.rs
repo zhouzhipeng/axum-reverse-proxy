@@ -252,7 +252,7 @@ async fn test_proxy_exact_path_handling() {
     });
     let app = Router::new()
         .route("/", echo_handler.clone())
-        .route("/*path", echo_handler);
+        .route("/{*path}", echo_handler);
 
     let test_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let test_addr = test_listener.local_addr().unwrap();
