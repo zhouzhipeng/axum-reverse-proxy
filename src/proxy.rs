@@ -1,6 +1,8 @@
 use axum::body::Body;
 use http::StatusCode;
 use http_body_util::BodyExt;
+#[cfg(feature = "tls")]
+use hyper_tls::HttpsConnector;
 use hyper_util::client::legacy::{
     connect::{Connect, HttpConnector},
     Client,
@@ -22,7 +24,12 @@ pub struct ReverseProxy<C: Connect + Clone + Send + Sync + 'static> {
     client: Client<C, Body>,
 }
 
-impl ReverseProxy<HttpConnector> {
+#[cfg(feature = "tls")]
+pub type StandardReverseProxy = ReverseProxy<HttpsConnector<HttpConnector>>;
+#[cfg(not(feature = "tls"))]
+pub type StandardReverseProxy = ReverseProxy<HttpConnector>;
+
+impl StandardReverseProxy {
     /// Creates a new `ReverseProxy` instance.
     ///
     /// # Arguments
@@ -47,6 +54,9 @@ impl ReverseProxy<HttpConnector> {
         connector.set_keepalive(Some(std::time::Duration::from_secs(60)));
         connector.set_connect_timeout(Some(std::time::Duration::from_secs(10)));
         connector.set_reuse_address(true);
+
+        #[cfg(feature = "tls")]
+        let connector = HttpsConnector::new_with_connector(connector);
 
         let client = Client::builder(hyper_util::rt::TokioExecutor::new())
             .pool_idle_timeout(std::time::Duration::from_secs(60))
