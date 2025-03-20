@@ -1,5 +1,6 @@
 use crate::proxy::ReverseProxy;
 use axum::{extract::State, routing::Router};
+use hyper_util::client::legacy::connect::Connect;
 
 /// Enables conversion from a `ReverseProxy` into an Axum `Router`.
 ///
@@ -19,14 +20,15 @@ use axum::{extract::State, routing::Router};
 /// let proxy = ReverseProxy::new("/api", "https://api.example.com");
 /// let app: Router = proxy.into();
 /// ```
-impl<S> From<ReverseProxy> for Router<S>
+impl<C, S> From<ReverseProxy<C>> for Router<S>
 where
+    C: Connect + Clone + Send + Sync + 'static,
     S: Send + Sync + Clone + 'static,
 {
-    fn from(proxy: ReverseProxy) -> Self {
+    fn from(proxy: ReverseProxy<C>) -> Self {
         let path = proxy.path().to_string();
         let proxy_router = Router::new()
-            .fallback(|State(proxy): State<ReverseProxy>, req| async move {
+            .fallback(|State(proxy): State<ReverseProxy<C>>, req| async move {
                 proxy.proxy_request(req).await
             })
             .with_state(proxy);

@@ -1,7 +1,12 @@
 use axum::body::Body;
 use http::StatusCode;
 use http_body_util::BodyExt;
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+#[cfg(feature = "tls")]
+use hyper_tls::HttpsConnector;
+use hyper_util::client::legacy::{
+    connect::{Connect, HttpConnector},
+    Client,
+};
 use std::convert::Infallible;
 use tracing::{error, trace};
 
@@ -13,13 +18,18 @@ use crate::websocket;
 /// to a target upstream server. It manages its own HTTP client with configurable settings
 /// for connection pooling, timeouts, and retries.
 #[derive(Clone)]
-pub struct ReverseProxy {
+pub struct ReverseProxy<C: Connect + Clone + Send + Sync + 'static> {
     path: String,
     target: String,
-    client: Client<HttpConnector, Body>,
+    client: Client<C, Body>,
 }
 
-impl ReverseProxy {
+#[cfg(feature = "tls")]
+pub type StandardReverseProxy = ReverseProxy<HttpsConnector<HttpConnector>>;
+#[cfg(not(feature = "tls"))]
+pub type StandardReverseProxy = ReverseProxy<HttpConnector>;
+
+impl StandardReverseProxy {
     /// Creates a new `ReverseProxy` instance.
     ///
     /// # Arguments
@@ -45,6 +55,9 @@ impl ReverseProxy {
         connector.set_connect_timeout(Some(std::time::Duration::from_secs(10)));
         connector.set_reuse_address(true);
 
+        #[cfg(feature = "tls")]
+        let connector = HttpsConnector::new_with_connector(connector);
+
         let client = Client::builder(hyper_util::rt::TokioExecutor::new())
             .pool_idle_timeout(std::time::Duration::from_secs(60))
             .pool_max_idle_per_host(32)
@@ -54,7 +67,9 @@ impl ReverseProxy {
 
         Self::new_with_client(path, target, client)
     }
+}
 
+impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
     /// Creates a new `ReverseProxy` instance with a custom HTTP client.
     ///
     /// This method allows for more fine-grained control over the proxy behavior by accepting
@@ -84,7 +99,7 @@ impl ReverseProxy {
     ///     client,
     /// );
     /// ```
-    pub fn new_with_client<S>(path: S, target: S, client: Client<HttpConnector, Body>) -> Self
+    pub fn new_with_client<S>(path: S, target: S, client: Client<C, Body>) -> Self
     where
         S: Into<String>,
     {
