@@ -123,6 +123,14 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
     /// Handles the proxying of a single request to the upstream server.
     pub async fn proxy_request(
         &self,
+        req: axum::http::Request<Body>,
+    ) -> Result<axum::http::Response<Body>, Infallible> {
+        self.handle_request(req).await
+    }
+
+    /// Core proxy logic used by the [`tower::Service`] implementation.
+    async fn handle_request(
+        &self,
         mut req: axum::http::Request<Body>,
     ) -> Result<axum::http::Response<Body>, Infallible> {
         trace!("Proxying request method={} uri={}", req.method(), req.uri());
@@ -228,5 +236,30 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
         } else {
             format!("{}{}", target, path)
         }
+    }
+}
+
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
+use tower::Service;
+
+impl<C> Service<axum::http::Request<Body>> for ReverseProxy<C>
+where
+    C: Connect + Clone + Send + Sync + 'static,
+{
+    type Response = axum::http::Response<Body>;
+    type Error = Infallible;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: axum::http::Request<Body>) -> Self::Future {
+        let this = self.clone();
+        Box::pin(async move { this.handle_request(req).await })
     }
 }
