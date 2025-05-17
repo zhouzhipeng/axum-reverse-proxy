@@ -10,10 +10,10 @@ The eventual goal would be to benchmark ourselves against common reverse proxy l
 
 ## Features
 
-- 🛣️ Path-based routing
+- 🛣 Path-based routing
 - 🔄 Automatic retry mechanism with exponential backoff
 - 📨 Header forwarding (with host header management)
-- ⚙️ Configurable HTTP client settings
+- ⚙ Configurable HTTP client settings
 - 🔌 Easy integration with Axum's Router
 - 🧰 Custom client configuration support
 - 🔒 HTTPS support
