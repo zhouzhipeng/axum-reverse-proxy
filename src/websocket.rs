@@ -45,6 +45,29 @@ pub(crate) fn is_websocket_upgrade(headers: &HeaderMap<HeaderValue>) -> bool {
     has_upgrade && has_connection && has_websocket_key && has_websocket_version
 }
 
+#[cfg(test)]
+pub(crate) fn compute_host_header(url: &str) -> (String, u16) {
+    let url = Url::parse(url).unwrap();
+    let scheme = url.scheme();
+    let host = url.host_str().unwrap();
+    let port = match url.port() {
+        Some(p) => p,
+        None => {
+            if scheme == "wss" {
+                443
+            } else {
+                80
+            }
+        }
+    };
+    let header = if (scheme == "wss" && port == 443) || (scheme == "ws" && port == 80) {
+        host.to_string()
+    } else {
+        format!("{}:{}", host, port)
+    };
+    (header, port)
+}
+
 /// Handle a WebSocket upgrade request by:
 /// 1. Validating the upgrade request
 /// 2. Computing the WebSocket accept key
@@ -92,11 +115,21 @@ pub(crate) async fn handle_websocket(
 
     trace!("Connecting to upstream WebSocket at {}", upstream_url);
 
-    // Parse the URL to get the host
+    // Parse the URL to get the host and scheme
     let url = Url::parse(&upstream_url)?;
+    let scheme = url.scheme();
     let host = url.host_str().ok_or("Missing host in URL")?;
-    let port = url.port().unwrap_or(80);
-    let host_header = if port == 80 {
+    let port = match url.port() {
+        Some(p) => p,
+        None => {
+            if scheme == "wss" {
+                443
+            } else {
+                80
+            }
+        }
+    };
+    let host_header = if (scheme == "wss" && port == 443) || (scheme == "ws" && port == 80) {
         host.to_string()
     } else {
         format!("{}:{}", host, port)
@@ -271,4 +304,30 @@ async fn handle_websocket_connection(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_host_header;
+
+    #[test]
+    fn host_header_ws_default_port() {
+        let (host, port) = compute_host_header("ws://example.com/path");
+        assert_eq!(host, "example.com");
+        assert_eq!(port, 80);
+    }
+
+    #[test]
+    fn host_header_wss_default_port() {
+        let (host, port) = compute_host_header("wss://example.com/path");
+        assert_eq!(host, "example.com");
+        assert_eq!(port, 443);
+    }
+
+    #[test]
+    fn host_header_wss_custom_port() {
+        let (host, port) = compute_host_header("wss://example.com:8443/path");
+        assert_eq!(host, "example.com:8443");
+        assert_eq!(port, 8443);
+    }
 }
