@@ -1,5 +1,5 @@
 use axum::{
-    body::Body,
+    body::{to_bytes, Body},
     http::{Method, Request, StatusCode},
     Router,
 };
@@ -401,12 +401,17 @@ async fn test_max_forwards_zero_trace_response() {
         .header("Max-Forwards", "0")
         .body(Body::empty())
         .unwrap();
+    // Capture a debug representation of the original request before it's moved
+    let request_debug = format!("{:?}", &request);
 
     let response = app.clone().oneshot(request).await.unwrap();
 
     // Should return 200 OK with the request as the body
     assert_eq!(response.status(), StatusCode::OK);
-    // TODO: Verify that the response body contains the original request
+    // Read the body and ensure it contains the original request text
+    let body_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    assert!(body_str.contains(&request_debug));
 }
 
 #[tokio::test]
