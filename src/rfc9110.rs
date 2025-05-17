@@ -372,9 +372,10 @@ fn process_connection_header(request: &mut Request<Body>) {
         if let Ok(connection_str) = connection.to_str() {
             for header in connection_str.split(',') {
                 let header = header.trim().to_ascii_lowercase();
-                // Try to parse as a header name, if it fails, skip it
                 if let Ok(header_name) = HeaderName::from_str(&header) {
-                    headers_to_remove.insert(header_name);
+                    if is_hop_by_hop_header(&header_name) || !is_end_to_end_header(&header_name) {
+                        headers_to_remove.insert(header_name);
+                    }
                 }
             }
         }
@@ -477,10 +478,11 @@ fn process_response_headers(response: &mut Response<Body>) {
     {
         if let Ok(connection_str) = connection.to_str() {
             for header in connection_str.split(',') {
-                let header = header.trim();
-                // Try to parse as a header name, if it fails, skip it
-                if let Ok(header_name) = HeaderName::from_str(header) {
-                    headers_to_remove.insert(header_name);
+                let header = header.trim().to_ascii_lowercase();
+                if let Ok(header_name) = HeaderName::from_str(&header) {
+                    if is_hop_by_hop_header(&header_name) || !is_end_to_end_header(&header_name) {
+                        headers_to_remove.insert(header_name);
+                    }
                 }
             }
         }
@@ -536,5 +538,24 @@ fn is_hop_by_hop_header(name: &HeaderName) -> bool {
             | "trailer"
             | "upgrade"
             | "via"
+    )
+}
+
+/// Check if a header is a known end-to-end header
+fn is_end_to_end_header(name: &HeaderName) -> bool {
+    matches!(
+        name.as_str(),
+        "cache-control"
+            | "authorization"
+            | "content-length"
+            | "content-type"
+            | "content-encoding"
+            | "accept"
+            | "accept-encoding"
+            | "accept-language"
+            | "range"
+            | "cookie"
+            | "set-cookie"
+            | "etag"
     )
 }
