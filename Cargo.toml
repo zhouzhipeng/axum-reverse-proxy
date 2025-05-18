@@ -53,14 +53,19 @@ harness = false
 [[example]]
 name = "basic"
 path = "examples/basic.rs"
-features = ["tls"]
+required-features = ["tls"]
 
 [[example]]
 name = "nested"
 path = "examples/nested.rs"
-features = ["tls"]
+required-features = ["tls"]
 
 [[example]]
 name = "tower_middleware"
 path = "examples/tower_middleware.rs"
-features = ["tls"]
+required-features = ["tls"]
+
+[[example]]
+name = "retry"
+path = "examples/retry.rs"
+required-features = ["tls"]

@@ -131,7 +131,7 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
     /// Core proxy logic used by the [`tower::Service`] implementation.
     async fn handle_request(
         &self,
-        mut req: axum::http::Request<Body>,
+        req: axum::http::Request<Body>,
     ) -> Result<axum::http::Response<Body>, Infallible> {
         trace!("Proxying request method={} uri={}", req.method(), req.uri());
         trace!("Original headers headers={:?}", req.headers());
@@ -151,72 +151,60 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
             }
         }
 
-        let mut retries: u32 = 3;
-        let mut error_msg;
-
-        loop {
-            let forward_req = {
-                let mut builder = axum::http::Request::builder()
+        let forward_req = {
+            let mut builder =
+                axum::http::Request::builder()
                     .method(req.method().clone())
                     .uri(self.transform_uri(
                         req.uri().path_and_query().map(|x| x.as_str()).unwrap_or(""),
                     ));
 
-                // Forward headers
-                for (key, value) in req.headers() {
-                    if key != "host" {
-                        builder = builder.header(key, value);
-                    }
+            // Forward headers
+            for (key, value) in req.headers() {
+                if key != "host" {
+                    builder = builder.header(key, value);
                 }
+            }
 
-                // Take the request body
-                let (parts, body) = req.into_parts();
-                req = axum::http::Request::from_parts(parts, Body::empty());
-                builder.body(body).unwrap()
-            };
+            // Take the request body
+            let (parts, body) = req.into_parts();
+            drop(parts);
+            builder.body(body).unwrap()
+        };
 
-            trace!(
-                "Forwarding headers forwarded_headers={:?}",
-                forward_req.headers()
-            );
+        trace!(
+            "Forwarding headers forwarded_headers={:?}",
+            forward_req.headers()
+        );
 
-            match self.client.request(forward_req).await {
-                Ok(res) => {
-                    trace!(
-                        "Received response status={} headers={:?} version={:?}",
-                        res.status(),
-                        res.headers(),
-                        res.version()
-                    );
+        match self.client.request(forward_req).await {
+            Ok(res) => {
+                trace!(
+                    "Received response status={} headers={:?} version={:?}",
+                    res.status(),
+                    res.headers(),
+                    res.version()
+                );
 
-                    let (parts, body) = res.into_parts();
-                    let body = Body::from_stream(body.into_data_stream());
+                let (parts, body) = res.into_parts();
+                let body = Body::from_stream(body.into_data_stream());
 
-                    let mut response = axum::http::Response::new(body);
-                    *response.status_mut() = parts.status;
-                    *response.version_mut() = parts.version;
-                    *response.headers_mut() = parts.headers;
-                    return Ok(response);
-                }
-                Err(e) => {
-                    error_msg = e.to_string();
-                    retries = retries.saturating_sub(1);
-                    if retries == 0 {
-                        error!("Proxy error occurred after all retries err={}", error_msg);
-                        return Ok(axum::http::Response::builder()
-                            .status(StatusCode::BAD_GATEWAY)
-                            .body(Body::from(format!(
-                                "Failed to connect to upstream server: {}",
-                                error_msg
-                            )))
-                            .unwrap());
-                    }
-                    error!(
-                        "Proxy error occurred, retrying ({} left) err={}",
-                        retries, error_msg
-                    );
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                }
+                let mut response = axum::http::Response::new(body);
+                *response.status_mut() = parts.status;
+                *response.version_mut() = parts.version;
+                *response.headers_mut() = parts.headers;
+                Ok(response)
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                error!("Proxy error occurred err={}", error_msg);
+                Ok(axum::http::Response::builder()
+                    .status(StatusCode::BAD_GATEWAY)
+                    .body(Body::from(format!(
+                        "Failed to connect to upstream server: {}",
+                        error_msg
+                    )))
+                    .unwrap())
             }
         }
     }
