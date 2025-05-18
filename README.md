@@ -11,7 +11,7 @@ The eventual goal would be to benchmark ourselves against common reverse proxy l
 ## Features
 
 - 🛣 Path-based routing
-- 🔄 Automatic retry mechanism with exponential backoff
+- 🔄 Optional retry mechanism with exponential backoff
 - 📨 Header forwarding (with host header management)
 - ⚙ Configurable HTTP client settings
 - 🔌 Easy integration with Axum's Router
@@ -146,8 +146,6 @@ let proxy = ReverseProxy::new_with_client("/api", "https://api.example.com", cli
 ## Configuration
 
 The default configuration includes:
-
-- 3 retry attempts with exponential backoff
 - 60-second keepalive timeout
 - 10-second connect timeout
 - TCP nodelay enabled
@@ -159,6 +157,7 @@ The default configuration includes:
 Check out the [examples](examples/) directory for more usage examples:
 
 - [Basic Proxy](examples/nested.rs) - Shows how to set up a basic reverse proxy with path-based routing
+- [Retry Proxy](examples/retry.rs) - Demonstrates enabling retries via `RetryLayer`
 
 ## Contributing
 

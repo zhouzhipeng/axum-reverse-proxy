@@ -5,7 +5,7 @@
 //! It supports:
 //!
 //! - Path-based routing
-//! - Automatic retry mechanism
+//! - Optional retry mechanism via a [`tower::Layer`]
 //! - Header forwarding
 //! - Configurable HTTP client settings
 //! - WebSocket proxying with:
@@ -127,9 +127,11 @@
 //! - Multiple concurrent connections
 
 mod proxy;
+mod retry;
 mod rfc9110;
 mod router;
 mod websocket;
 
 pub use proxy::ReverseProxy;
+pub use retry::RetryLayer;
 pub use rfc9110::{Rfc9110Config, Rfc9110Layer};

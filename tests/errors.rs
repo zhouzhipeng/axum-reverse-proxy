@@ -71,11 +71,10 @@ async fn test_proxy_error_handling() {
     let response = client
         .get(format!("http://{}/test", proxy_addr))
         .send()
-        .await;
+        .await
+        .unwrap();
 
-    assert!(response.is_err());
-    let err = response.unwrap_err();
-    assert!(err.is_timeout() || err.is_connect());
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_GATEWAY);
 
     // Clean up
     proxy_server.abort();
