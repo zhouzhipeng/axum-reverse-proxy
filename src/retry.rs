@@ -18,6 +18,7 @@ pub struct RetryLayer {
 
 impl RetryLayer {
     pub fn new(attempts: usize) -> Self {
+        let attempts = attempts.max(1);
         Self {
             attempts,
             delay: Duration::from_millis(500),
@@ -25,6 +26,7 @@ impl RetryLayer {
     }
 
     pub fn with_delay(attempts: usize, delay: Duration) -> Self {
+        let attempts = attempts.max(1);
         Self { attempts, delay }
     }
 }
