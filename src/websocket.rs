@@ -32,9 +32,8 @@ pub(crate) fn is_websocket_upgrade(headers: &HeaderMap<HeaderValue>) -> bool {
         .get("connection")
         .and_then(|v| v.to_str().ok())
         .map(|v| {
-            v.to_ascii_lowercase()
-                .split(',')
-                .any(|part| part.trim() == "upgrade")
+            v.split(',')
+                .any(|part| part.trim().eq_ignore_ascii_case("upgrade"))
         })
         .unwrap_or(false);
 

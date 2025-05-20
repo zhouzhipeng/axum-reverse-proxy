@@ -38,6 +38,17 @@ use std::{
     str::FromStr,
     task::{Context, Poll},
 };
+
+/// Standard hop-by-hop headers defined by RFC 9110
+static HOP_BY_HOP_HEADERS: &[&str] = &[
+    "connection",
+    "keep-alive",
+    "proxy-connection",
+    "transfer-encoding",
+    "te",
+    "trailer",
+    "upgrade",
+];
 use tower::{Layer, Service};
 
 /// Represents a single Via header entry
@@ -354,13 +365,9 @@ fn process_connection_header(request: &mut Request<Body>) {
     let mut headers_to_remove = HashSet::new();
 
     // Add standard hop-by-hop headers
-    headers_to_remove.insert(HeaderName::from_static("connection"));
-    headers_to_remove.insert(HeaderName::from_static("keep-alive"));
-    headers_to_remove.insert(HeaderName::from_static("proxy-connection"));
-    headers_to_remove.insert(HeaderName::from_static("transfer-encoding"));
-    headers_to_remove.insert(HeaderName::from_static("te"));
-    headers_to_remove.insert(HeaderName::from_static("trailer"));
-    headers_to_remove.insert(HeaderName::from_static("upgrade"));
+    for &name in HOP_BY_HOP_HEADERS {
+        headers_to_remove.insert(HeaderName::from_static(name));
+    }
 
     // Get headers listed in Connection header
     if let Some(connection) = request
@@ -371,8 +378,8 @@ fn process_connection_header(request: &mut Request<Body>) {
     {
         if let Ok(connection_str) = connection.to_str() {
             for header in connection_str.split(',') {
-                let header = header.trim().to_ascii_lowercase();
-                if let Ok(header_name) = HeaderName::from_str(&header) {
+                let header = header.trim();
+                if let Ok(header_name) = HeaderName::from_str(header) {
                     if is_hop_by_hop_header(&header_name) || !is_end_to_end_header(&header_name) {
                         headers_to_remove.insert(header_name);
                     }
@@ -387,10 +394,9 @@ fn process_connection_header(request: &mut Request<Body>) {
         .headers()
         .iter()
         .filter(|(k, _)| {
-            let k_lower = k.as_str().to_ascii_lowercase();
             headers_to_remove
                 .iter()
-                .any(|h| h.as_str().to_ascii_lowercase() == k_lower)
+                .any(|h| k.as_str().eq_ignore_ascii_case(h.as_str()))
         })
         .map(|(k, _)| k.clone())
         .collect();
@@ -461,13 +467,9 @@ fn process_response_headers(response: &mut Response<Body>) {
     let mut headers_to_remove = HashSet::new();
 
     // Add standard hop-by-hop headers
-    headers_to_remove.insert(HeaderName::from_static("connection"));
-    headers_to_remove.insert(HeaderName::from_static("keep-alive"));
-    headers_to_remove.insert(HeaderName::from_static("proxy-connection"));
-    headers_to_remove.insert(HeaderName::from_static("transfer-encoding"));
-    headers_to_remove.insert(HeaderName::from_static("te"));
-    headers_to_remove.insert(HeaderName::from_static("trailer"));
-    headers_to_remove.insert(HeaderName::from_static("upgrade"));
+    for &name in HOP_BY_HOP_HEADERS {
+        headers_to_remove.insert(HeaderName::from_static(name));
+    }
 
     // Get headers listed in Connection header
     if let Some(connection) = response
@@ -478,8 +480,8 @@ fn process_response_headers(response: &mut Response<Body>) {
     {
         if let Ok(connection_str) = connection.to_str() {
             for header in connection_str.split(',') {
-                let header = header.trim().to_ascii_lowercase();
-                if let Ok(header_name) = HeaderName::from_str(&header) {
+                let header = header.trim();
+                if let Ok(header_name) = HeaderName::from_str(header) {
                     if is_hop_by_hop_header(&header_name) || !is_end_to_end_header(&header_name) {
                         headers_to_remove.insert(header_name);
                     }
@@ -494,10 +496,9 @@ fn process_response_headers(response: &mut Response<Body>) {
         .headers()
         .iter()
         .filter(|(k, _)| {
-            let k_lower = k.as_str().to_ascii_lowercase();
             headers_to_remove
                 .iter()
-                .any(|h| h.as_str().to_ascii_lowercase() == k_lower)
+                .any(|h| k.as_str().eq_ignore_ascii_case(h.as_str()))
         })
         .map(|(k, _)| k.clone())
         .collect();
@@ -528,17 +529,10 @@ fn process_response_headers(response: &mut Response<Body>) {
 
 /// Check if a header is a hop-by-hop header
 fn is_hop_by_hop_header(name: &HeaderName) -> bool {
-    matches!(
-        name.as_str(),
-        "connection"
-            | "keep-alive"
-            | "proxy-connection"
-            | "transfer-encoding"
-            | "te"
-            | "trailer"
-            | "upgrade"
-            | "via"
-    )
+    HOP_BY_HOP_HEADERS
+        .iter()
+        .any(|h| name.as_str().eq_ignore_ascii_case(h))
+        || name.as_str().eq_ignore_ascii_case("via")
 }
 
 /// Check if a header is a known end-to-end header
