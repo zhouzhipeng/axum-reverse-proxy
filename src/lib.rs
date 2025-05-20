@@ -8,6 +8,7 @@
 //! - Optional retry mechanism via a [`tower::Layer`]
 //! - Header forwarding
 //! - Configurable HTTP client settings
+//! - Round-robin load balancing across multiple upstreams
 //! - WebSocket proxying with:
 //!   - Automatic upgrade handling
 //!   - Bidirectional message forwarding
@@ -26,6 +27,16 @@
 //! let proxy = ReverseProxy::new("/api", "https://httpbin.org");
 //!
 //! // Convert the proxy to a router and use it in your Axum application
+//! let app: Router = proxy.into();
+//! ```
+//!
+//! # Load Balanced Example
+//!
+//! ```rust
+//! use axum::Router;
+//! use axum_reverse_proxy::BalancedProxy;
+//!
+//! let proxy = BalancedProxy::new("/api", vec!["https://api1.example.com", "https://api2.example.com"]);
 //! let app: Router = proxy.into();
 //! ```
 //!
@@ -126,12 +137,15 @@
 //! - Connection close frames
 //! - Multiple concurrent connections
 
+mod balanced_proxy;
 mod proxy;
 mod retry;
 mod rfc9110;
 mod router;
 mod websocket;
 
+pub use balanced_proxy::BalancedProxy;
+pub use balanced_proxy::StandardBalancedProxy;
 pub use proxy::ReverseProxy;
 pub use retry::RetryLayer;
 pub use rfc9110::{Rfc9110Config, Rfc9110Layer};

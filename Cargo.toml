@@ -70,3 +70,8 @@ required-features = ["tls"]
 name = "retry"
 path = "examples/retry.rs"
 required-features = ["tls"]
+
+[[example]]
+name = "balanced"
+path = "examples/balanced.rs"
+required-features = ["tls"]
