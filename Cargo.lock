@@ -171,6 +171,7 @@ dependencies = [
  "criterion",
  "futures-util",
  "http 1.2.0",
+ "http-body 1.0.1",
  "http-body-util",
  "hyper 1.5.2",
  "hyper-tls 0.6.0",
