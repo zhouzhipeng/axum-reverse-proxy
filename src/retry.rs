@@ -1,7 +1,10 @@
 use axum::body::Body;
+use bytes::{Bytes, BytesMut};
 use http::StatusCode;
+use http_body::{Body as HttpBody, Frame, SizeHint};
 use http_body_util::BodyExt;
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{
     future::Future,
@@ -36,6 +39,48 @@ pub struct Retry<S> {
     inner: S,
     attempts: usize,
     delay: Duration,
+}
+
+struct BufferedBody<B> {
+    body: B,
+    buf: Arc<Mutex<BytesMut>>,
+}
+
+impl<B> BufferedBody<B> {
+    fn new(body: B, buf: Arc<Mutex<BytesMut>>) -> Self {
+        Self { body, buf }
+    }
+}
+
+impl<B> HttpBody for BufferedBody<B>
+where
+    B: HttpBody<Data = Bytes> + Unpin,
+{
+    type Data = Bytes;
+    type Error = B::Error;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        match Pin::new(&mut self.body).poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                if let Some(data) = frame.data_ref() {
+                    self.buf.lock().unwrap().extend_from_slice(data);
+                }
+                Poll::Ready(Some(Ok(frame)))
+            }
+            other => other,
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.body.size_hint()
+    }
 }
 
 impl<S> Layer<S> for RetryLayer {
@@ -75,14 +120,25 @@ where
         let delay = self.delay;
         Box::pin(async move {
             let (parts, body) = req.into_parts();
-            let bytes = body.collect().await.unwrap().to_bytes();
-            for attempt in 0..attempts {
+            let buf = Arc::new(Mutex::new(BytesMut::new()));
+            let wrapped = BufferedBody::new(body, buf.clone());
+            let attempt_req = axum::http::Request::from_parts(
+                parts.clone(),
+                Body::from_stream(wrapped.into_data_stream()),
+            );
+            let mut res = inner.call(attempt_req).await?;
+            if res.status() != StatusCode::BAD_GATEWAY || attempts == 1 {
+                return Ok(res);
+            }
+
+            for attempt in 1..attempts {
+                tokio::time::sleep(delay).await;
+                let bytes = buf.lock().unwrap().clone().freeze();
                 let req = axum::http::Request::from_parts(parts.clone(), Body::from(bytes.clone()));
-                let res = inner.call(req).await?;
+                res = inner.call(req).await?;
                 if res.status() != StatusCode::BAD_GATEWAY || attempt == attempts - 1 {
                     return Ok(res);
                 }
-                tokio::time::sleep(delay).await;
             }
             unreachable!();
         })

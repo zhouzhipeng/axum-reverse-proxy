@@ -158,6 +158,7 @@ Check out the [examples](examples/) directory for more usage examples:
 
 - [Basic Proxy](examples/nested.rs) - Shows how to set up a basic reverse proxy with path-based routing
 - [Retry Proxy](examples/retry.rs) - Demonstrates enabling retries via `RetryLayer`
+- **Note:** very large requests may still need buffering depending on the body wrapper's strategy.
 
 ## Contributing
 
