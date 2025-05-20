@@ -36,3 +36,22 @@ where
         }
     }
 }
+
+use crate::balanced_proxy::BalancedProxy;
+
+impl<C, S> From<BalancedProxy<C>> for Router<S>
+where
+    C: Connect + Clone + Send + Sync + 'static,
+    S: Send + Sync + Clone + 'static,
+{
+    fn from(proxy: BalancedProxy<C>) -> Self {
+        let path = proxy.path().to_string();
+        let proxy_router = Router::<S>::new().fallback_service(proxy);
+
+        if ["", "/"].contains(&path.as_str()) {
+            proxy_router
+        } else {
+            Router::new().nest(&path, proxy_router)
+        }
+    }
+}

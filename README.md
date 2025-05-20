@@ -14,6 +14,7 @@ The eventual goal would be to benchmark ourselves against common reverse proxy l
 - 🔄 Optional retry mechanism with exponential backoff
 - 📨 Header forwarding (with host header management)
 - ⚙ Configurable HTTP client settings
+- 🔀 Round-robin load balancing across multiple upstreams
 - 🔌 Easy integration with Axum's Router
 - 🧰 Custom client configuration support
 - 🔒 HTTPS support
@@ -36,6 +37,16 @@ use axum_reverse_proxy::ReverseProxy;
 let proxy = ReverseProxy::new("/api", "https://httpbin.org");
 
 // Convert the proxy to a router and use it in your Axum application
+let app: Router = proxy.into();
+```
+
+### Load Balanced Upstreams
+
+```rust
+use axum::Router;
+use axum_reverse_proxy::BalancedProxy;
+
+let proxy = BalancedProxy::new("/api", vec!["https://api1.example.com", "https://api2.example.com"]);
 let app: Router = proxy.into();
 ```
 
@@ -64,6 +75,7 @@ use tower_buffer::BufferLayer;
 
 let proxy = ReverseProxy::new("/api", "https://api.example.com");
 let app: Router = proxy.into();
+
 
 // Add buffering middleware
 let app = app.layer(ServiceBuilder::new().layer(BufferLayer::new(100)));
@@ -158,6 +170,7 @@ Check out the [examples](examples/) directory for more usage examples:
 
 - [Basic Proxy](examples/nested.rs) - Shows how to set up a basic reverse proxy with path-based routing
 - [Retry Proxy](examples/retry.rs) - Demonstrates enabling retries via `RetryLayer`
+- [Balanced Proxy](examples/balanced.rs) - Forward to multiple upstream servers with round-robin load balancing
 - **Note:** very large requests may still need buffering depending on the body wrapper's strategy.
 
 ## Contributing
