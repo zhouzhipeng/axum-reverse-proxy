@@ -75,3 +75,8 @@ required-features = ["tls"]
 name = "balanced"
 path = "examples/balanced.rs"
 required-features = ["tls"]
+
+[[example]]
+name = "discoverable"
+path = "examples/discoverable.rs"
+required-features = ["tls"]

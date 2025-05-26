@@ -40,6 +40,48 @@
 //! let app: Router = proxy.into();
 //! ```
 //!
+//! # Service Discovery Example
+//!
+//! For dynamic service discovery, use the `DiscoverableBalancedProxy` with any implementation
+//! of the `tower::discover::Discover` trait:
+//!
+//! ```rust,no_run
+//! use axum::Router;
+//! use axum_reverse_proxy::DiscoverableBalancedProxy;
+//! use futures_util::stream::Stream;
+//! use tower::discover::Change;
+//! use std::pin::Pin;
+//! use std::task::{Context, Poll};
+//!
+//! // Example discovery stream that implements Stream<Item = Result<Change<Key, Service>, Error>>
+//! #[derive(Clone)]
+//! struct MyDiscoveryStream {
+//!     // Your discovery implementation here
+//! }
+//!
+//! impl Stream for MyDiscoveryStream {
+//!     type Item = Result<Change<usize, String>, Box<dyn std::error::Error + Send + Sync>>;
+//!
+//!     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+//!         // Poll your service discovery system here
+//!         Poll::Pending
+//!     }
+//! }
+//!
+//! # async fn example() {
+//! use hyper_util::client::legacy::{connect::HttpConnector, Client};
+//!
+//! let discovery = MyDiscoveryStream { /* ... */ };
+//! let connector = HttpConnector::new();
+//! let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
+//!
+//! let mut proxy = DiscoverableBalancedProxy::new_with_client("/api", client, discovery);
+//! proxy.start_discovery().await;
+//!
+//! let app: Router = Router::new().nest_service("/", proxy);
+//! # }
+//! ```
+//!
 //! # Using Tower Middleware
 //!
 //! The proxy integrates seamlessly with Tower middleware, allowing you to transform requests
@@ -145,7 +187,9 @@ mod router;
 mod websocket;
 
 pub use balanced_proxy::BalancedProxy;
+pub use balanced_proxy::DiscoverableBalancedProxy;
 pub use balanced_proxy::StandardBalancedProxy;
+pub use balanced_proxy::StandardDiscoverableBalancedProxy;
 pub use proxy::ReverseProxy;
 pub use retry::RetryLayer;
 pub use rfc9110::{Rfc9110Config, Rfc9110Layer};
