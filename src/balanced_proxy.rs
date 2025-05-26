@@ -132,7 +132,7 @@ where
         if self.proxies.is_empty() {
             None
         } else {
-            let idx = self.counter.fetch_add(1, Ordering::SeqCst) % self.proxies.len();
+            let idx = self.counter.fetch_add(1, Ordering::Relaxed) % self.proxies.len();
             Some(self.proxies[idx].clone())
         }
     }
@@ -355,7 +355,7 @@ where
                         if list_guard.is_empty() {
                             None
                         } else {
-                            let idx = counter.fetch_add(1, Ordering::SeqCst) % list_guard.len();
+                            let idx = counter.fetch_add(1, Ordering::Relaxed) % list_guard.len();
                             let key = &list_guard[idx];
 
                             let proxies_guard = proxies.read().await;
