@@ -216,8 +216,8 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
 
         let remaining = if path == "/" && !self.path.is_empty() {
             ""
-        } else if path.starts_with(&self.path) {
-            &path[base_path.len()..]
+        } else if let Some(stripped) = path.strip_prefix(base_path) {
+            stripped
         } else {
             path
         };
@@ -251,5 +251,28 @@ where
     fn call(&mut self, req: axum::http::Request<Body>) -> Self::Future {
         let this = self.clone();
         Box::pin(async move { this.handle_request(req).await })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StandardReverseProxy as ReverseProxy;
+
+    #[test]
+    fn transform_uri_with_and_without_trailing_slash() {
+        let proxy = ReverseProxy::new("/api/", "http://target");
+        assert_eq!(proxy.transform_uri("/api/test"), "http://target/test");
+
+        let proxy_no_slash = ReverseProxy::new("/api", "http://target");
+        assert_eq!(
+            proxy_no_slash.transform_uri("/api/test"),
+            "http://target/test"
+        );
+    }
+
+    #[test]
+    fn transform_uri_root() {
+        let proxy = ReverseProxy::new("/", "http://target");
+        assert_eq!(proxy.transform_uri("/test"), "http://target/test");
     }
 }
