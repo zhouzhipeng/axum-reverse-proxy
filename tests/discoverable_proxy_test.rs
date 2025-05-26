@@ -402,3 +402,162 @@ async fn test_load_balancing_strategy_enum() {
     let debug_str = format!("{:?}", strategy);
     assert!(debug_str.contains("P2cPendingRequests"));
 }
+#[tokio::test]
+async fn test_p2c_pending_requests_prefers_fast_service() {
+    use axum::{
+        body::{to_bytes, Body},
+        routing::get,
+        Router,
+    };
+    use hyper_util::client::legacy::{connect::HttpConnector, Client};
+    use std::time::Duration;
+    use tokio::net::TcpListener;
+    use tower::ServiceExt;
+
+    // Fast responder
+    let fast_app = Router::new().route("/", get(|| async { "fast" }));
+    let fast_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let fast_addr = fast_listener.local_addr().unwrap();
+    let fast_server = tokio::spawn(async move {
+        axum::serve(fast_listener, fast_app).await.unwrap();
+    });
+
+    // Slow responder
+    let slow_app = Router::new().route(
+        "/",
+        get(|| async {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            "slow"
+        }),
+    );
+    let slow_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let slow_addr = slow_listener.local_addr().unwrap();
+    let slow_server = tokio::spawn(async move {
+        axum::serve(slow_listener, slow_app).await.unwrap();
+    });
+
+    let discovery = TestDiscoveryStream::new(vec![
+        format!("http://{}", fast_addr),
+        format!("http://{}", slow_addr),
+    ]);
+
+    let connector = HttpConnector::new();
+    let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
+
+    let mut proxy = DiscoverableBalancedProxy::new_with_client_and_strategy(
+        "/",
+        client,
+        discovery,
+        LoadBalancingStrategy::P2cPendingRequests,
+    );
+    proxy.start_discovery().await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let mut handles = Vec::new();
+    for _ in 0..20 {
+        let svc = proxy.clone();
+        handles.push(tokio::spawn(async move {
+            let req = axum::http::Request::builder()
+                .uri("/")
+                .body(Body::empty())
+                .unwrap();
+            let resp = svc.oneshot(req).await.unwrap();
+            let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+            String::from_utf8(body.to_vec()).unwrap()
+        }));
+    }
+
+    let mut fast = 0;
+    let mut slow = 0;
+    for h in handles {
+        match h.await.unwrap().as_str() {
+            "fast" => fast += 1,
+            "slow" => slow += 1,
+            other => panic!("unexpected response {other}"),
+        }
+    }
+
+    assert!(fast > slow, "fast {} slow {}", fast, slow);
+
+    fast_server.abort();
+    slow_server.abort();
+}
+
+#[tokio::test]
+async fn test_p2c_peak_ewma_prefers_fast_service() {
+    use axum::{
+        body::{to_bytes, Body},
+        routing::get,
+        Router,
+    };
+    use hyper_util::client::legacy::{connect::HttpConnector, Client};
+    use std::time::Duration;
+    use tokio::net::TcpListener;
+    use tower::ServiceExt;
+
+    let fast_app = Router::new().route("/", get(|| async { "fast" }));
+    let fast_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let fast_addr = fast_listener.local_addr().unwrap();
+    let fast_server = tokio::spawn(async move {
+        axum::serve(fast_listener, fast_app).await.unwrap();
+    });
+
+    let slow_app = Router::new().route(
+        "/",
+        get(|| async {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            "slow"
+        }),
+    );
+    let slow_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let slow_addr = slow_listener.local_addr().unwrap();
+    let slow_server = tokio::spawn(async move {
+        axum::serve(slow_listener, slow_app).await.unwrap();
+    });
+
+    let discovery = TestDiscoveryStream::new(vec![
+        format!("http://{}", fast_addr),
+        format!("http://{}", slow_addr),
+    ]);
+
+    let connector = HttpConnector::new();
+    let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
+
+    let mut proxy = DiscoverableBalancedProxy::new_with_client_and_strategy(
+        "/",
+        client,
+        discovery,
+        LoadBalancingStrategy::P2cPeakEwma,
+    );
+    proxy.start_discovery().await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let mut handles = Vec::new();
+    for _ in 0..20 {
+        let svc = proxy.clone();
+        handles.push(tokio::spawn(async move {
+            let req = axum::http::Request::builder()
+                .uri("/")
+                .body(Body::empty())
+                .unwrap();
+            let resp = svc.oneshot(req).await.unwrap();
+            let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+            String::from_utf8(body.to_vec()).unwrap()
+        }));
+    }
+
+    let mut fast = 0;
+    let mut slow = 0;
+    for h in handles {
+        match h.await.unwrap().as_str() {
+            "fast" => fast += 1,
+            "slow" => slow += 1,
+            other => panic!("unexpected response {other}"),
+        }
+    }
+
+    assert!(fast > slow, "fast {} slow {}", fast, slow);
+
+    fast_server.abort();
+    slow_server.abort();
+}
