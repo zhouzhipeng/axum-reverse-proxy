@@ -13,4 +13,5 @@ cargo clippy --features full --bench proxy_bench --fix --allow-dirty --allow-sta
 cargo clippy --features full --bench websocket_bench --fix --allow-dirty --allow-staged -- -D warnings
 
 echo "Running tests..."
-cargo test --features full 
+cargo test --all-features
+

@@ -1,5 +1,5 @@
 use axum::body::Body;
-#[cfg(feature = "tls")]
+#[cfg(all(feature = "tls", not(feature = "native-tls")))]
 use hyper_rustls::HttpsConnector;
 #[cfg(feature = "native-tls")]
 use hyper_tls::HttpsConnector as NativeTlsHttpsConnector;
@@ -48,11 +48,9 @@ pub struct BalancedProxy<C: Connect + Clone + Send + Sync + 'static> {
 
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
 pub type StandardBalancedProxy = BalancedProxy<HttpsConnector<HttpConnector>>;
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+#[cfg(feature = "native-tls")]
 pub type StandardBalancedProxy = BalancedProxy<NativeTlsHttpsConnector<HttpConnector>>;
-#[cfg(all(feature = "tls", feature = "native-tls"))]
-pub type StandardBalancedProxy = BalancedProxy<HttpsConnector<HttpConnector>>;
-#[cfg(not(any(feature = "tls", feature = "native-tls")))]
+#[cfg(all(not(feature = "tls"), not(feature = "native-tls")))]
 pub type StandardBalancedProxy = BalancedProxy<HttpConnector>;
 
 impl StandardBalancedProxy {
@@ -78,19 +76,8 @@ impl StandardBalancedProxy {
                 .wrap_connector(connector)
         };
 
-        #[cfg(all(feature = "native-tls", not(feature = "tls")))]
+        #[cfg(feature = "native-tls")]
         let connector = NativeTlsHttpsConnector::new_with_connector(connector);
-
-        #[cfg(all(feature = "tls", feature = "native-tls"))]
-        let connector = {
-            use hyper_rustls::HttpsConnectorBuilder;
-            HttpsConnectorBuilder::new()
-                .with_native_roots()
-                .unwrap()
-                .https_or_http()
-                .enable_http1()
-                .wrap_connector(connector)
-        };
 
         let client = Client::builder(hyper_util::rt::TokioExecutor::new())
             .pool_idle_timeout(std::time::Duration::from_secs(60))
@@ -199,13 +186,10 @@ where
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
 pub type StandardDiscoverableBalancedProxy<D> =
     DiscoverableBalancedProxy<HttpsConnector<HttpConnector>, D>;
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+#[cfg(feature = "native-tls")]
 pub type StandardDiscoverableBalancedProxy<D> =
     DiscoverableBalancedProxy<NativeTlsHttpsConnector<HttpConnector>, D>;
-#[cfg(all(feature = "tls", feature = "native-tls"))]
-pub type StandardDiscoverableBalancedProxy<D> =
-    DiscoverableBalancedProxy<HttpsConnector<HttpConnector>, D>;
-#[cfg(not(any(feature = "tls", feature = "native-tls")))]
+#[cfg(all(not(feature = "tls"), not(feature = "native-tls")))]
 pub type StandardDiscoverableBalancedProxy<D> = DiscoverableBalancedProxy<HttpConnector, D>;
 
 impl<C, D> DiscoverableBalancedProxy<C, D>
