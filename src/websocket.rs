@@ -11,7 +11,7 @@ use tokio_tungstenite::{
     tungstenite::{Error, Message},
 };
 use tracing::{error, trace};
-use url::Url;
+use url::{Host, Url};
 
 /// Check if a request is a WebSocket upgrade request by examining the headers.
 ///
@@ -48,7 +48,11 @@ pub(crate) fn is_websocket_upgrade(headers: &HeaderMap<HeaderValue>) -> bool {
 pub(crate) fn compute_host_header(url: &str) -> (String, u16) {
     let url = Url::parse(url).unwrap();
     let scheme = url.scheme();
-    let host = url.host_str().unwrap();
+    let host = match url.host().unwrap() {
+        Host::Ipv6(addr) => format!("[{}]", addr),
+        Host::Ipv4(addr) => addr.to_string(),
+        Host::Domain(s) => s.to_string(),
+    };
     let port = match url.port() {
         Some(p) => p,
         None => {
@@ -60,7 +64,7 @@ pub(crate) fn compute_host_header(url: &str) -> (String, u16) {
         }
     };
     let header = if (scheme == "wss" && port == 443) || (scheme == "ws" && port == 80) {
-        host.to_string()
+        host.clone()
     } else {
         format!("{}:{}", host, port)
     };
@@ -117,7 +121,11 @@ pub(crate) async fn handle_websocket(
     // Parse the URL to get the host and scheme
     let url = Url::parse(&upstream_url)?;
     let scheme = url.scheme();
-    let host = url.host_str().ok_or("Missing host in URL")?;
+    let host = match url.host().ok_or("Missing host in URL")? {
+        Host::Ipv6(addr) => format!("[{}]", addr),
+        Host::Ipv4(addr) => addr.to_string(),
+        Host::Domain(s) => s.to_string(),
+    };
     let port = match url.port() {
         Some(p) => p,
         None => {
@@ -129,7 +137,7 @@ pub(crate) async fn handle_websocket(
         }
     };
     let host_header = if (scheme == "wss" && port == 443) || (scheme == "ws" && port == 80) {
-        host.to_string()
+        host.clone()
     } else {
         format!("{}:{}", host, port)
     };
@@ -391,5 +399,12 @@ mod tests {
         );
         headers.remove("Sec-WebSocket-Version");
         assert!(!is_websocket_upgrade(&headers));
+    }
+
+    #[test]
+    fn host_header_ipv6_with_port() {
+        let (host, port) = compute_host_header("ws://[::1]:9000/path");
+        assert_eq!(host, "[::1]:9000");
+        assert_eq!(port, 9000);
     }
 }
