@@ -28,6 +28,7 @@ tokio-tungstenite = "^0.21"
 tower = { version = "^0.4", features = ["full"] }
 tracing = "^0.1"
 url = "^2.5"
+hickory-resolver = { version = "0.25.2", optional = true }
 
 [dev-dependencies]
 async-stream = "^0.3"
@@ -42,6 +43,8 @@ tracing-subscriber = { version = "^0.3", features = ["env-filter"] }
 [features]
 default = ["tls"]
 tls = ["hyper-tls"]
+dns = ["hickory-resolver"]
+full = ["tls", "dns"]
 
 [[bench]]
 name = "proxy_bench"
@@ -85,3 +88,8 @@ required-features = ["tls"]
 name = "load_balancing_strategies"
 path = "examples/load_balancing_strategies.rs"
 required-features = ["tls"]
+
+[[example]]
+name = "dns_discovery"
+path = "examples/dns_discovery.rs"
+required-features = ["tls", "dns"]

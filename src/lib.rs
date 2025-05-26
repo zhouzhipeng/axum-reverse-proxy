@@ -92,6 +92,47 @@
 //! # }
 //! ```
 //!
+//! # DNS-Based Service Discovery
+//!
+//! For DNS-based service discovery, use the built-in `DnsDiscovery` (requires the `dns` feature):
+//!
+//! ```toml
+//! [dependencies]
+//! axum-reverse-proxy = { version = "*", features = ["dns"] }
+//! # Or to enable all features:
+//! # axum-reverse-proxy = { version = "*", features = ["full"] }
+//! ```
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "dns")]
+//! # {
+//! use axum::Router;
+//! use axum_reverse_proxy::{DiscoverableBalancedProxy, DnsDiscovery, DnsDiscoveryConfig};
+//! use std::time::Duration;
+//!
+//! # async fn example() {
+//! // Create DNS discovery configuration
+//! let dns_config = DnsDiscoveryConfig::new("api.example.com", 80)
+//!     .with_refresh_interval(Duration::from_secs(30))
+//!     .with_https(false);
+//!
+//! // Create the DNS discovery instance
+//! let discovery = DnsDiscovery::new(dns_config).expect("Failed to create DNS discovery");
+//!
+//! // Create the discoverable balanced proxy with DNS discovery
+//! let mut proxy = DiscoverableBalancedProxy::new_with_client("/api",
+//!     hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+//!         .build(hyper_util::client::legacy::connect::HttpConnector::new()),
+//!     discovery);
+//!
+//! // Start the discovery process
+//! proxy.start_discovery().await;
+//!
+//! let app: Router = Router::new().nest_service("/", proxy);
+//! # }
+//! # }
+//! ```
+//!
 //! # Load Balancing Strategies
 //!
 //! The `DiscoverableBalancedProxy` supports multiple load balancing strategies:
@@ -226,6 +267,8 @@
 //! - Multiple concurrent connections
 
 mod balanced_proxy;
+#[cfg(feature = "dns")]
+mod dns_discovery;
 mod proxy;
 mod retry;
 mod rfc9110;
@@ -237,6 +280,8 @@ pub use balanced_proxy::DiscoverableBalancedProxy;
 pub use balanced_proxy::LoadBalancingStrategy;
 pub use balanced_proxy::StandardBalancedProxy;
 pub use balanced_proxy::StandardDiscoverableBalancedProxy;
+#[cfg(feature = "dns")]
+pub use dns_discovery::{DnsDiscovery, DnsDiscoveryConfig, StaticDnsDiscovery};
 pub use proxy::ReverseProxy;
 pub use retry::RetryLayer;
 pub use rfc9110::{Rfc9110Config, Rfc9110Layer};
