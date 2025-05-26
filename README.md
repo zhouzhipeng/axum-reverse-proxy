@@ -25,6 +25,21 @@ The eventual goal would be to benchmark ourselves against common reverse proxy l
 
 Run `cargo add axum-reverse-proxy` to add the library to your project.
 
+### Cargo Features
+
+This crate comes with a couple of optional features:
+
+- `tls` – enables HTTPS support via `hyper-tls` (this is on by default)
+- `dns` – enables DNS-based service discovery
+- `full` – enables all features (`tls` and `dns`)
+
+To enable features explicitly in `Cargo.toml`:
+
+```toml
+[dependencies]
+axum-reverse-proxy = { version = "*", features = ["dns"] }
+```
+
 ## Quick Start
 
 Here's a simple example that forwards all requests under `/api` to `httpbin.org`:
@@ -40,6 +55,7 @@ let proxy = ReverseProxy::new("/api", "https://httpbin.org");
 let app: Router = proxy.into();
 ```
 
+
 ### Load Balanced Upstreams
 
 ```rust
@@ -49,6 +65,28 @@ use axum_reverse_proxy::BalancedProxy;
 let proxy = BalancedProxy::new("/api", vec!["https://api1.example.com", "https://api2.example.com"]);
 let app: Router = proxy.into();
 ```
+### Discoverable Balanced Proxy and DNS Discovery
+
+`DiscoverableBalancedProxy` works with any [`tower::discover::Discover`] implementation to update its upstream list at runtime. The crate provides `DnsDiscovery` and `StaticDnsDiscovery` (requires the `dns` feature) for automatic resolution of hostnames.
+
+`DnsDiscovery` periodically resolves a hostname, while `StaticDnsDiscovery` performs a single lookup at startup.
+
+```rust,no_run
+use axum::Router;
+use axum_reverse_proxy::{DiscoverableBalancedProxy, DnsDiscovery, DnsDiscoveryConfig};
+use std::time::Duration;
+
+let dns_config = DnsDiscoveryConfig::new("api.example.com", 443)
+    .with_https(true)
+    .with_refresh_interval(Duration::from_secs(30));
+let discovery = DnsDiscovery::new(dns_config).unwrap();
+
+let mut proxy = DiscoverableBalancedProxy::new("/api", discovery);
+proxy.start_discovery().await;
+
+let app: Router = Router::new().nest_service("/", proxy);
+```
+
 
 ## Advanced Usage
 
