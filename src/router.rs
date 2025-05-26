@@ -37,7 +37,7 @@ where
     }
 }
 
-use crate::balanced_proxy::BalancedProxy;
+use crate::balanced_proxy::{BalancedProxy, DiscoverableBalancedProxy};
 
 impl<C, S> From<BalancedProxy<C>> for Router<S>
 where
@@ -45,6 +45,27 @@ where
     S: Send + Sync + Clone + 'static,
 {
     fn from(proxy: BalancedProxy<C>) -> Self {
+        let path = proxy.path().to_string();
+        let proxy_router = Router::<S>::new().fallback_service(proxy);
+
+        if ["", "/"].contains(&path.as_str()) {
+            proxy_router
+        } else {
+            Router::new().nest(&path, proxy_router)
+        }
+    }
+}
+
+impl<C, D, S> From<DiscoverableBalancedProxy<C, D>> for Router<S>
+where
+    C: Connect + Clone + Send + Sync + 'static,
+    D: tower::discover::Discover + Clone + Send + Sync + 'static,
+    D::Service: Into<String> + Send,
+    D::Key: Clone + std::fmt::Debug + Send + Sync + std::hash::Hash,
+    D::Error: std::fmt::Debug + Send,
+    S: Send + Sync + Clone + 'static,
+{
+    fn from(proxy: DiscoverableBalancedProxy<C, D>) -> Self {
         let path = proxy.path().to_string();
         let proxy_router = Router::<S>::new().fallback_service(proxy);
 
