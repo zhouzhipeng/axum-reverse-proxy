@@ -33,21 +33,10 @@ async fn main() {
             .wrap_connector(connector)
     };
 
-    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
+    #[cfg(feature = "native-tls")]
     let connector = {
         use hyper_tls::HttpsConnector;
         HttpsConnector::new_with_connector(connector)
-    };
-
-    #[cfg(all(feature = "tls", feature = "native-tls"))]
-    let connector = {
-        use hyper_rustls::HttpsConnectorBuilder;
-        HttpsConnectorBuilder::new()
-            .with_native_roots()
-            .unwrap()
-            .https_or_http()
-            .enable_http1()
-            .wrap_connector(connector)
     };
 
     let client = Client::builder(hyper_util::rt::TokioExecutor::new())

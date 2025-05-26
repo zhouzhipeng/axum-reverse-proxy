@@ -228,11 +228,11 @@ axum-reverse-proxy = { version = "1.0", features = ["native-tls"] }
 
 - `default = ["tls"]` - Uses rustls (recommended)
 - `features = ["native-tls"]` - Uses native TLS implementation
-- `features = ["tls", "native-tls"]` - Both available, rustls takes precedence
+- `features = ["tls", "native-tls"]` - Both available, native-tls takes precedence
 - `features = ["full"]` - Includes `tls` (rustls) and `dns` features
 - `features = []` - No TLS support (HTTP only)
 
-**Note:** The `native-tls` feature is a separate opt-in and is not included in the `full` feature set. This ensures that rustls remains the default for security and consistency.
+**Note:** When both `tls` and `native-tls` features are enabled, `native-tls` takes precedence since explicit selection of native-tls indicates a preference for the system's TLS implementation. The `native-tls` feature is a separate opt-in and is not included in the `full` feature set.
 
 ## Examples
 
