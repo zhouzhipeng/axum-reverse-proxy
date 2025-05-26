@@ -41,3 +41,26 @@ async fn test_round_robin_distribution() {
     server1.abort();
     server2.abort();
 }
+
+#[tokio::test]
+async fn test_balanced_proxy_no_upstreams_returns_503() {
+    use axum::body::Body;
+    use tower::Service;
+
+    let mut proxy = BalancedProxy::new(String::from("/"), Vec::<String>::new());
+
+    let req = axum::http::Request::builder()
+        .method("GET")
+        .uri("/test")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = proxy.call(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+    assert!(body_str.contains("No upstream services available"));
+}

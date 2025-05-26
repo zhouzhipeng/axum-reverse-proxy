@@ -100,9 +100,13 @@ where
         &self.path
     }
 
-    fn next_proxy(&self) -> ReverseProxy<C> {
-        let idx = self.counter.fetch_add(1, Ordering::SeqCst) % self.proxies.len();
-        self.proxies[idx].clone()
+    fn next_proxy(&self) -> Option<ReverseProxy<C>> {
+        if self.proxies.is_empty() {
+            None
+        } else {
+            let idx = self.counter.fetch_add(1, Ordering::SeqCst) % self.proxies.len();
+            Some(self.proxies[idx].clone())
+        }
     }
 }
 
@@ -126,9 +130,18 @@ where
     }
 
     fn call(&mut self, req: axum::http::Request<Body>) -> Self::Future {
-        let mut proxy = self.next_proxy();
-        trace!("balanced proxying via upstream {}", proxy.target());
-        Box::pin(async move { proxy.call(req).await })
+        if let Some(mut proxy) = self.next_proxy() {
+            trace!("balanced proxying via upstream {}", proxy.target());
+            Box::pin(async move { proxy.call(req).await })
+        } else {
+            warn!("No upstream services available");
+            Box::pin(async move {
+                Ok(axum::http::Response::builder()
+                    .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
+                    .body(Body::from("No upstream services available"))
+                    .unwrap())
+            })
+        }
     }
 }
 
