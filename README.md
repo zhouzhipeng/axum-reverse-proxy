@@ -202,6 +202,38 @@ The default configuration includes:
 - Connection pooling with 32 idle connections per host
 - Automatic host header management
 
+### TLS Configuration
+
+By default, this library uses [rustls](https://github.com/rustls/rustls) for TLS connections, which provides a pure-Rust, secure, and modern TLS implementation.
+
+#### Default TLS (rustls)
+
+```toml
+[dependencies]
+axum-reverse-proxy = "0.9"
+# or explicitly enable the default TLS feature
+axum-reverse-proxy = { version = "0.9", features = ["tls"] }
+```
+
+#### Using native-tls
+
+If you need to use the system's native TLS implementation (OpenSSL on Linux, Secure Transport on macOS, SChannel on Windows), you can opt into the `native-tls` feature:
+
+```toml
+[dependencies]
+axum-reverse-proxy = { version = "0.9", features = ["native-tls"] }
+```
+
+#### Feature Combinations
+
+- `default = ["tls"]` - Uses rustls (recommended)
+- `features = ["native-tls"]` - Uses native TLS implementation
+- `features = ["tls", "native-tls"]` - Both available, rustls takes precedence
+- `features = ["full"]` - Includes `tls` (rustls) and `dns` features
+- `features = []` - No TLS support (HTTP only)
+
+**Note:** The `native-tls` feature is a separate opt-in and is not included in the `full` feature set. This ensures that rustls remains the default for security and consistency.
+
 ## Examples
 
 Check out the [examples](examples/) directory for more usage examples:

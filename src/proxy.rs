@@ -2,7 +2,9 @@ use axum::body::Body;
 use http::StatusCode;
 use http_body_util::BodyExt;
 #[cfg(feature = "tls")]
-use hyper_tls::HttpsConnector;
+use hyper_rustls::HttpsConnector;
+#[cfg(feature = "native-tls")]
+use hyper_tls::HttpsConnector as NativeTlsHttpsConnector;
 use hyper_util::client::legacy::{
     connect::{Connect, HttpConnector},
     Client,
@@ -24,9 +26,13 @@ pub struct ReverseProxy<C: Connect + Clone + Send + Sync + 'static> {
     client: Client<C, Body>,
 }
 
-#[cfg(feature = "tls")]
+#[cfg(all(feature = "tls", not(feature = "native-tls")))]
 pub type StandardReverseProxy = ReverseProxy<HttpsConnector<HttpConnector>>;
-#[cfg(not(feature = "tls"))]
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+pub type StandardReverseProxy = ReverseProxy<NativeTlsHttpsConnector<HttpConnector>>;
+#[cfg(all(feature = "tls", feature = "native-tls"))]
+pub type StandardReverseProxy = ReverseProxy<HttpsConnector<HttpConnector>>;
+#[cfg(not(any(feature = "tls", feature = "native-tls")))]
 pub type StandardReverseProxy = ReverseProxy<HttpConnector>;
 
 impl StandardReverseProxy {
@@ -55,8 +61,30 @@ impl StandardReverseProxy {
         connector.set_connect_timeout(Some(std::time::Duration::from_secs(10)));
         connector.set_reuse_address(true);
 
-        #[cfg(feature = "tls")]
-        let connector = HttpsConnector::new_with_connector(connector);
+        #[cfg(all(feature = "tls", not(feature = "native-tls")))]
+        let connector = {
+            use hyper_rustls::HttpsConnectorBuilder;
+            HttpsConnectorBuilder::new()
+                .with_native_roots()
+                .unwrap()
+                .https_or_http()
+                .enable_http1()
+                .wrap_connector(connector)
+        };
+
+        #[cfg(all(feature = "native-tls", not(feature = "tls")))]
+        let connector = NativeTlsHttpsConnector::new_with_connector(connector);
+
+        #[cfg(all(feature = "tls", feature = "native-tls"))]
+        let connector = {
+            use hyper_rustls::HttpsConnectorBuilder;
+            HttpsConnectorBuilder::new()
+                .with_native_roots()
+                .unwrap()
+                .https_or_http()
+                .enable_http1()
+                .wrap_connector(connector)
+        };
 
         let client = Client::builder(hyper_util::rt::TokioExecutor::new())
             .pool_idle_timeout(std::time::Duration::from_secs(60))
