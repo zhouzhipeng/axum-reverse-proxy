@@ -275,9 +275,9 @@
 //!
 //! ```toml
 //! [dependencies]
-//! axum-reverse-proxy = "0.9"
+//! axum-reverse-proxy = "1.0"
 //! # or explicitly enable the default TLS feature
-//! axum-reverse-proxy = { version = "0.9", features = ["tls"] }
+//! axum-reverse-proxy = { version = "1.0", features = ["tls"] }
 //! ```
 //!
 //! ## Using native-tls
@@ -287,7 +287,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! axum-reverse-proxy = { version = "0.9", features = ["native-tls"] }
+//! axum-reverse-proxy = { version = "1.0", features = ["native-tls"] }
 //! ```
 //!
 //! ## Feature Combinations

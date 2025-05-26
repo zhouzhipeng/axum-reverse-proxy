@@ -210,9 +210,9 @@ By default, this library uses [rustls](https://github.com/rustls/rustls) for TLS
 
 ```toml
 [dependencies]
-axum-reverse-proxy = "0.9"
+axum-reverse-proxy = "1.0"
 # or explicitly enable the default TLS feature
-axum-reverse-proxy = { version = "0.9", features = ["tls"] }
+axum-reverse-proxy = { version = "1.0", features = ["tls"] }
 ```
 
 #### Using native-tls
@@ -221,7 +221,7 @@ If you need to use the system's native TLS implementation (OpenSSL on Linux, Sec
 
 ```toml
 [dependencies]
-axum-reverse-proxy = { version = "0.9", features = ["native-tls"] }
+axum-reverse-proxy = { version = "1.0", features = ["native-tls"] }
 ```
 
 #### Feature Combinations
