@@ -1,4 +1,4 @@
-use axum_reverse_proxy::DiscoverableBalancedProxy;
+use axum_reverse_proxy::{DiscoverableBalancedProxy, LoadBalancingStrategy};
 use futures_util::stream::Stream;
 use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use std::pin::Pin;
@@ -318,4 +318,87 @@ async fn test_discoverable_proxy_service_replacement() {
 
     // Should have 1 service (the replacement)
     assert_eq!(proxy.service_count().await, 1);
+}
+
+#[tokio::test]
+async fn test_discoverable_proxy_load_balancing_strategies() {
+    let discovery_stream = TestDiscoveryStream::new(vec![
+        "http://example1.com".to_string(),
+        "http://example2.com".to_string(),
+    ]);
+
+    let connector = HttpConnector::new();
+    let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
+
+    // Test round-robin strategy (default)
+    let proxy_rr = DiscoverableBalancedProxy::new_with_client(
+        "/api",
+        client.clone(),
+        discovery_stream.clone(),
+    );
+    assert_eq!(proxy_rr.strategy(), LoadBalancingStrategy::RoundRobin);
+
+    // Test explicit round-robin strategy
+    let proxy_rr_explicit = DiscoverableBalancedProxy::new_with_client_and_strategy(
+        "/api",
+        client.clone(),
+        discovery_stream.clone(),
+        LoadBalancingStrategy::RoundRobin,
+    );
+    assert_eq!(
+        proxy_rr_explicit.strategy(),
+        LoadBalancingStrategy::RoundRobin
+    );
+
+    // Test P2C pending requests strategy
+    let proxy_p2c_pending = DiscoverableBalancedProxy::new_with_client_and_strategy(
+        "/api",
+        client.clone(),
+        discovery_stream.clone(),
+        LoadBalancingStrategy::P2cPendingRequests,
+    );
+    assert_eq!(
+        proxy_p2c_pending.strategy(),
+        LoadBalancingStrategy::P2cPendingRequests
+    );
+
+    // Test P2C peak EWMA strategy
+    let proxy_p2c_ewma = DiscoverableBalancedProxy::new_with_client_and_strategy(
+        "/api",
+        client,
+        discovery_stream,
+        LoadBalancingStrategy::P2cPeakEwma,
+    );
+    assert_eq!(
+        proxy_p2c_ewma.strategy(),
+        LoadBalancingStrategy::P2cPeakEwma
+    );
+}
+
+#[tokio::test]
+async fn test_load_balancing_strategy_enum() {
+    // Test default strategy
+    assert_eq!(
+        LoadBalancingStrategy::default(),
+        LoadBalancingStrategy::RoundRobin
+    );
+
+    // Test strategy equality
+    assert_eq!(
+        LoadBalancingStrategy::RoundRobin,
+        LoadBalancingStrategy::RoundRobin
+    );
+    assert_ne!(
+        LoadBalancingStrategy::RoundRobin,
+        LoadBalancingStrategy::P2cPendingRequests
+    );
+    assert_ne!(
+        LoadBalancingStrategy::P2cPendingRequests,
+        LoadBalancingStrategy::P2cPeakEwma
+    );
+
+    // Test debug formatting
+    let strategy = LoadBalancingStrategy::P2cPendingRequests;
+    let debug_str = format!("{:?}", strategy);
+    assert!(debug_str.contains("P2cPendingRequests"));
 }

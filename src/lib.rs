@@ -47,7 +47,7 @@
 //!
 //! ```rust,no_run
 //! use axum::Router;
-//! use axum_reverse_proxy::DiscoverableBalancedProxy;
+//! use axum_reverse_proxy::{DiscoverableBalancedProxy, LoadBalancingStrategy};
 //! use futures_util::stream::Stream;
 //! use tower::discover::Change;
 //! use std::pin::Pin;
@@ -75,11 +75,57 @@
 //! let connector = HttpConnector::new();
 //! let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
 //!
-//! let mut proxy = DiscoverableBalancedProxy::new_with_client("/api", client, discovery);
+//! // Use round-robin load balancing (default)
+//! let mut proxy = DiscoverableBalancedProxy::new_with_client("/api", client.clone(), discovery.clone());
+//!
+//! // Or specify a load balancing strategy
+//! let mut proxy_p2c = DiscoverableBalancedProxy::new_with_client_and_strategy(
+//!     "/api",
+//!     client,
+//!     discovery,
+//!     LoadBalancingStrategy::P2cPendingRequests,
+//! );
+//!
 //! proxy.start_discovery().await;
 //!
 //! let app: Router = Router::new().nest_service("/", proxy);
 //! # }
+//! ```
+//!
+//! # Load Balancing Strategies
+//!
+//! The `DiscoverableBalancedProxy` supports multiple load balancing strategies:
+//!
+//! - **`RoundRobin`** (default): Simple round-robin distribution, good for homogeneous services
+//! - **`P2cPendingRequests`**: Power of Two Choices algorithm using pending request count as load metric
+//! - **`P2cPeakEwma`**: Power of Two Choices algorithm using peak EWMA latency as load metric
+//!
+//! ```rust,no_run
+//! # use axum_reverse_proxy::{DiscoverableBalancedProxy, LoadBalancingStrategy};
+//! # use hyper_util::client::legacy::{connect::HttpConnector, Client};
+//! # use futures_util::stream::Stream;
+//! # use tower::discover::Change;
+//! # use std::pin::Pin;
+//! # use std::task::{Context, Poll};
+//! # #[derive(Clone)]
+//! # struct MyDiscoveryStream;
+//! # impl Stream for MyDiscoveryStream {
+//! #     type Item = Result<Change<usize, String>, Box<dyn std::error::Error + Send + Sync>>;
+//! #     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+//! #         Poll::Pending
+//! #     }
+//! # }
+//! # let discovery = MyDiscoveryStream;
+//! # let connector = HttpConnector::new();
+//! # let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
+//!
+//! // Round-robin (default)
+//! let proxy_rr = DiscoverableBalancedProxy::new_with_client("/api", client.clone(), discovery.clone());
+//!
+//! // P2C with pending requests load measurement
+//! let proxy_p2c = DiscoverableBalancedProxy::new_with_client_and_strategy(
+//!     "/api", client, discovery, LoadBalancingStrategy::P2cPendingRequests
+//! );
 //! ```
 //!
 //! # Using Tower Middleware
@@ -188,6 +234,7 @@ mod websocket;
 
 pub use balanced_proxy::BalancedProxy;
 pub use balanced_proxy::DiscoverableBalancedProxy;
+pub use balanced_proxy::LoadBalancingStrategy;
 pub use balanced_proxy::StandardBalancedProxy;
 pub use balanced_proxy::StandardDiscoverableBalancedProxy;
 pub use proxy::ReverseProxy;

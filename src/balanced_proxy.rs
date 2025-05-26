@@ -9,11 +9,33 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
+use tower::balance::p2c::Balance;
 use tower::discover::{Change, Discover};
+use tower::load::CompleteOnResponse;
+use tower::load::{peak_ewma::PeakEwmaDiscover, pending_requests::PendingRequestsDiscover};
+use tower::ServiceExt;
 use tracing::{debug, error, trace, warn};
 
 use crate::proxy::ReverseProxy;
+
+/// Load balancing strategy for distributing requests across discovered services
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadBalancingStrategy {
+    /// Simple round-robin distribution (default)
+    RoundRobin,
+    /// Power of Two Choices with pending request count as load metric
+    P2cPendingRequests,
+    /// Power of Two Choices with peak EWMA latency as load metric
+    P2cPeakEwma,
+}
+
+impl Default for LoadBalancingStrategy {
+    fn default() -> Self {
+        Self::RoundRobin
+    }
+}
 
 #[derive(Clone)]
 pub struct BalancedProxy<C: Connect + Clone + Send + Sync + 'static> {
@@ -113,7 +135,7 @@ where
 /// A balanced proxy that supports dynamic service discovery.
 ///
 /// This proxy uses the tower::discover trait to dynamically add and remove
-/// upstream services. Services are load-balanced using a round-robin algorithm.
+/// upstream services. Services are load-balanced using a configurable strategy.
 #[derive(Clone)]
 pub struct DiscoverableBalancedProxy<C, D>
 where
@@ -129,6 +151,8 @@ where
     proxy_list: Arc<RwLock<Vec<D::Key>>>,
     counter: Arc<AtomicUsize>,
     discover: D,
+    strategy: LoadBalancingStrategy,
+    // No precomputed tower balancer; we create it on demand in `call` for P2C strategies.
 }
 
 #[cfg(feature = "tls")]
@@ -146,7 +170,21 @@ where
     D::Error: std::fmt::Debug + Send,
 {
     /// Creates a new discoverable balanced proxy with a custom client and discover implementation.
+    /// Uses round-robin load balancing by default.
     pub fn new_with_client<S>(path: S, client: Client<C, Body>, discover: D) -> Self
+    where
+        S: Into<String>,
+    {
+        Self::new_with_client_and_strategy(path, client, discover, LoadBalancingStrategy::default())
+    }
+
+    /// Creates a new discoverable balanced proxy with a custom client, discover implementation, and load balancing strategy.
+    pub fn new_with_client_and_strategy<S>(
+        path: S,
+        client: Client<C, Body>,
+        discover: D,
+        strategy: LoadBalancingStrategy,
+    ) -> Self
     where
         S: Into<String>,
     {
@@ -158,13 +196,20 @@ where
             proxies: Arc::new(RwLock::new(HashMap::new())),
             proxy_list: Arc::new(RwLock::new(Vec::new())),
             counter: Arc::new(AtomicUsize::new(0)),
-            discover,
+            discover: discover.clone(),
+            strategy,
+            // We build P2C balancers on demand so we don't store them here.
         }
     }
 
     /// Get the base path this proxy is configured to handle
     pub fn path(&self) -> &str {
         &self.path
+    }
+
+    /// Get the load balancing strategy being used
+    pub fn strategy(&self) -> LoadBalancingStrategy {
+        self.strategy
     }
 
     /// Start the discovery process in the background.
@@ -216,7 +261,6 @@ where
                     },
                     Some(Err(e)) => {
                         error!("Discovery error: {:?}", e);
-                        // Continue monitoring despite errors
                     }
                     None => {
                         warn!("Discovery stream ended");
@@ -253,36 +297,94 @@ where
         let proxies = Arc::clone(&self.proxies);
         let proxy_list = Arc::clone(&self.proxy_list);
         let counter = Arc::clone(&self.counter);
+        let strategy = self.strategy;
 
         Box::pin(async move {
-            // Get the next proxy using round-robin
-            let proxy_opt = {
-                let list_guard = proxy_list.read().await;
-                if list_guard.is_empty() {
-                    None
-                } else {
-                    let idx = counter.fetch_add(1, Ordering::SeqCst) % list_guard.len();
-                    let key = &list_guard[idx];
+            match strategy {
+                LoadBalancingStrategy::RoundRobin => {
+                    // Use round-robin load balancing
+                    let proxy_opt = {
+                        let list_guard = proxy_list.read().await;
+                        if list_guard.is_empty() {
+                            None
+                        } else {
+                            let idx = counter.fetch_add(1, Ordering::SeqCst) % list_guard.len();
+                            let key = &list_guard[idx];
 
-                    let proxies_guard = proxies.read().await;
-                    proxies_guard.get(key).cloned()
+                            let proxies_guard = proxies.read().await;
+                            proxies_guard.get(key).cloned()
+                        }
+                    };
+
+                    match proxy_opt {
+                        Some(mut proxy) => {
+                            trace!("Round-robin proxying via upstream {}", proxy.target());
+                            proxy.call(req).await
+                        }
+                        None => {
+                            warn!("No upstream services available");
+                            Ok(axum::http::Response::builder()
+                                .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
+                                .body(Body::from("No upstream services available"))
+                                .unwrap())
+                        }
+                    }
                 }
-            };
+                LoadBalancingStrategy::P2cPendingRequests | LoadBalancingStrategy::P2cPeakEwma => {
+                    // Build a fresh ServiceList discover wrapper over the currently known proxies.
 
-            match proxy_opt {
-                Some(mut proxy) => {
-                    trace!(
-                        "Discoverable balanced proxying via upstream {}",
-                        proxy.target()
+                    let services_vec: Vec<ReverseProxy<C>> = {
+                        let guard = proxies.read().await;
+                        guard.values().cloned().collect()
+                    };
+
+                    if services_vec.is_empty() {
+                        warn!("No upstream services available for P2C balancer");
+                        return Ok(axum::http::Response::builder()
+                            .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
+                            .body(Body::from("No upstream services available"))
+                            .unwrap());
+                    }
+
+                    // Create a ServiceList discover from the set of services.
+                    let discover = tower::discover::ServiceList::new::<axum::http::Request<Body>>(
+                        services_vec,
                     );
-                    proxy.call(req).await
-                }
-                None => {
-                    warn!("No upstream services available");
-                    Ok(axum::http::Response::builder()
-                        .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
-                        .body(Body::from("No upstream services available"))
-                        .unwrap())
+
+                    // Depending on strategy, wrap the discover with appropriate load metric and forward request.
+                    let result = match strategy {
+                        LoadBalancingStrategy::P2cPendingRequests => {
+                            let wrapped = PendingRequestsDiscover::new(
+                                discover,
+                                CompleteOnResponse::default(),
+                            );
+                            let bal = Balance::new(wrapped);
+                            bal.oneshot(req).await
+                        }
+                        LoadBalancingStrategy::P2cPeakEwma => {
+                            let wrapped = PeakEwmaDiscover::new(
+                                discover,
+                                Duration::from_millis(50),
+                                Duration::from_secs(30),
+                                CompleteOnResponse::default(),
+                            );
+                            let bal = Balance::new(wrapped);
+                            bal.oneshot(req).await
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    match result {
+                        Ok(resp) => Ok(resp),
+                        Err(err) => {
+                            // Tower balance converts errors into BoxError, convert to 503.
+                            error!(?err, "Balancer call failed");
+                            Ok(axum::http::Response::builder()
+                                .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
+                                .body(Body::from("Upstream call failed"))
+                                .unwrap())
+                        }
+                    }
                 }
             }
         })

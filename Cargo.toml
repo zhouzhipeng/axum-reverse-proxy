@@ -80,3 +80,8 @@ required-features = ["tls"]
 name = "discoverable"
 path = "examples/discoverable.rs"
 required-features = ["tls"]
+
+[[example]]
+name = "load_balancing_strategies"
+path = "examples/load_balancing_strategies.rs"
+required-features = ["tls"]
