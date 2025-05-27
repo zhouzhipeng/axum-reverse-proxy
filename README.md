@@ -11,7 +11,7 @@ The eventual goal would be to benchmark ourselves against common reverse proxy l
 ## Features
 
 - 🛣 Path-based routing
-- 🔄 Optional retry mechanism with exponential backoff
+- 🔄 Optional retry mechanism with configurable delay
 - 📨 Header forwarding (with host header management)
 - ⚙ Configurable HTTP client settings
 - 🔀 Round-robin load balancing across multiple upstreams
@@ -29,7 +29,7 @@ Run `cargo add axum-reverse-proxy` to add the library to your project.
 
 This crate comes with a couple of optional features:
 
-- `tls` – enables HTTPS support via `hyper-tls` (this is on by default)
+- `tls` – enables HTTPS support via `hyper-rustls` (this is on by default)
 - `dns` – enables DNS-based service discovery
 - `full` – enables all features (`tls` and `dns`)
 
@@ -238,7 +238,7 @@ axum-reverse-proxy = { version = "1.0", features = ["native-tls"] }
 
 Check out the [examples](examples/) directory for more usage examples:
 
-- [Basic Proxy](examples/nested.rs) - Shows how to set up a basic reverse proxy with path-based routing
+- [Basic Proxy](examples/basic.rs) - Shows how to set up a basic reverse proxy with path-based routing
 - [Retry Proxy](examples/retry.rs) - Demonstrates enabling retries via `RetryLayer`
 - [Balanced Proxy](examples/balanced.rs) - Forward to multiple upstream servers with round-robin load balancing
 - **Note:** very large requests may still need buffering depending on the body wrapper's strategy.
