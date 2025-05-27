@@ -242,3 +242,67 @@ async fn test_websocket_binary() {
         panic!("Did not receive response");
     }
 }
+
+#[tokio::test]
+async fn test_websocket_ping_pong() {
+    let (_upstream_addr, proxy_addr) = setup_test_server("http://").await;
+
+    // Create a WebSocket client connection through the proxy
+    let url = format!("ws://127.0.0.1:{}/ws", proxy_addr.port());
+    let (mut ws_stream, _) = tokio_tungstenite::connect_async(&url)
+        .await
+        .expect("Failed to connect");
+
+    // Send a ping frame and expect a pong response with the same payload
+    let ping_payload = b"hello".to_vec();
+    ws_stream
+        .send(tungstenite::Message::Ping(ping_payload.clone()))
+        .await
+        .expect("Failed to send ping message");
+
+    loop {
+        if let Some(msg) = ws_stream.next().await {
+            let msg = msg.expect("Failed to get message");
+            match msg {
+                tungstenite::Message::Pong(payload) => {
+                    assert_eq!(payload, ping_payload);
+                    break;
+                }
+                _ => continue,
+            }
+        } else {
+            panic!("Did not receive pong response");
+        }
+    }
+
+    // Send a pong frame which should be ignored by the server
+    ws_stream
+        .send(tungstenite::Message::Pong(Vec::new()))
+        .await
+        .expect("Failed to send pong message");
+
+    // Ensure the connection stays open by sending another text message
+    let text = "still alive";
+    ws_stream
+        .send(tungstenite::Message::Text(text.into()))
+        .await
+        .expect("Failed to send text message");
+
+    loop {
+        if let Some(msg) = ws_stream.next().await {
+            let msg = msg.expect("Failed to get message");
+            match msg {
+                tungstenite::Message::Text(t) => {
+                    assert_eq!(t, text);
+                    break;
+                }
+                tungstenite::Message::Ping(_) | tungstenite::Message::Pong(_) => {
+                    continue;
+                }
+                other => panic!("Unexpected message: {:?}", other),
+            }
+        } else {
+            panic!("Connection closed unexpectedly");
+        }
+    }
+}
