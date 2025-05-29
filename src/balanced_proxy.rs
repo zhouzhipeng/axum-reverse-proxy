@@ -9,18 +9,17 @@ use hyper_util::client::legacy::{
 };
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use tower::balance::p2c::Balance;
 use tower::discover::{Change, Discover};
-use tower::load::CompleteOnResponse;
-use tower::load::{peak_ewma::PeakEwmaDiscover, pending_requests::PendingRequestsDiscover};
-use tower::ServiceExt;
 use tracing::{debug, error, trace, warn};
 
 use crate::proxy::ReverseProxy;
+
+// For custom P2C implementation
+use rand::Rng;
 
 /// Load balancing strategy for distributing requests across discovered services
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,6 +185,8 @@ where
     counter: Arc<AtomicUsize>,
     discover: D,
     strategy: LoadBalancingStrategy,
+    // Custom P2C balancer for strategies that need it
+    p2c_balancer: Option<Arc<CustomP2cBalancer<C>>>,
 }
 
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
@@ -225,15 +226,28 @@ where
         S: Into<String>,
     {
         let path = path.into();
+        let proxies_snapshot = Arc::new(std::sync::RwLock::new(Arc::new(Vec::new())));
+
+        // Create P2C balancer if needed
+        let p2c_balancer = match strategy {
+            LoadBalancingStrategy::P2cPendingRequests | LoadBalancingStrategy::P2cPeakEwma => {
+                Some(Arc::new(CustomP2cBalancer::new(
+                    strategy,
+                    Arc::clone(&proxies_snapshot),
+                )))
+            }
+            LoadBalancingStrategy::RoundRobin => None,
+        };
 
         Self {
             path,
             client,
-            proxies_snapshot: Arc::new(std::sync::RwLock::new(Arc::new(Vec::new()))),
+            proxies_snapshot,
             proxy_keys: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             counter: Arc::new(AtomicUsize::new(0)),
             discover: discover.clone(),
             strategy,
+            p2c_balancer,
         }
     }
 
@@ -373,6 +387,7 @@ where
         };
         let counter = Arc::clone(&self.counter);
         let strategy = self.strategy;
+        let p2c_balancer = self.p2c_balancer.clone();
 
         Box::pin(async move {
             match strategy {
@@ -391,58 +406,248 @@ where
                     }
                 }
                 LoadBalancingStrategy::P2cPendingRequests | LoadBalancingStrategy::P2cPeakEwma => {
-                    if proxies_snapshot.is_empty() {
-                        warn!("No upstream services available for P2C balancer");
-                        return Ok(axum::http::Response::builder()
+                    // Use the custom P2C balancer
+                    if let Some(balancer) = p2c_balancer {
+                        balancer.call_with_p2c(req).await
+                    } else {
+                        // Fallback to error if balancer is not available
+                        error!("P2C balancer not available for strategy {:?}", strategy);
+                        Ok(axum::http::Response::builder()
                             .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
-                            .body(Body::from("No upstream services available"))
-                            .unwrap());
-                    }
-
-                    // Use the snapshot directly - no additional cloning needed
-                    let services_vec = (*proxies_snapshot).clone();
-
-                    // Create a ServiceList discover from the set of services.
-                    let discover = tower::discover::ServiceList::new::<axum::http::Request<Body>>(
-                        services_vec,
-                    );
-
-                    // Depending on strategy, wrap the discover with appropriate load metric and forward request.
-                    let result = match strategy {
-                        LoadBalancingStrategy::P2cPendingRequests => {
-                            let wrapped = PendingRequestsDiscover::new(
-                                discover,
-                                CompleteOnResponse::default(),
-                            );
-                            let bal = Balance::new(wrapped);
-                            bal.oneshot(req).await
-                        }
-                        LoadBalancingStrategy::P2cPeakEwma => {
-                            let wrapped = PeakEwmaDiscover::new(
-                                discover,
-                                Duration::from_millis(50),
-                                Duration::from_secs(30),
-                                CompleteOnResponse::default(),
-                            );
-                            let bal = Balance::new(wrapped);
-                            bal.oneshot(req).await
-                        }
-                        _ => unreachable!(),
-                    };
-
-                    match result {
-                        Ok(resp) => Ok(resp),
-                        Err(err) => {
-                            // Tower balance converts errors into BoxError, convert to 503.
-                            error!(?err, "Balancer call failed");
-                            Ok(axum::http::Response::builder()
-                                .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
-                                .body(Body::from("Upstream call failed"))
-                                .unwrap())
-                        }
+                            .body(Body::from("P2C balancer not available"))
+                            .unwrap())
                     }
                 }
             }
         })
+    }
+}
+
+/// Custom P2C load balancer that uses atomic operations for low-contention metrics tracking
+struct CustomP2cBalancer<C: Connect + Clone + Send + Sync + 'static> {
+    strategy: LoadBalancingStrategy,
+    proxies_snapshot: Arc<std::sync::RwLock<Arc<Vec<ReverseProxy<C>>>>>,
+    /// Metrics for each service, indexed by position in proxies_snapshot
+    /// We use Arc<Vec<Arc<ServiceMetrics>>> to allow concurrent access with minimal locking
+    metrics: Arc<std::sync::RwLock<Arc<Vec<Arc<ServiceMetrics>>>>>,
+}
+
+impl<C: Connect + Clone + Send + Sync + 'static> CustomP2cBalancer<C> {
+    fn new(
+        strategy: LoadBalancingStrategy,
+        proxies_snapshot: Arc<std::sync::RwLock<Arc<Vec<ReverseProxy<C>>>>>,
+    ) -> Self {
+        let initial_metrics = Arc::new(Vec::new());
+        Self {
+            strategy,
+            proxies_snapshot,
+            metrics: Arc::new(std::sync::RwLock::new(initial_metrics)),
+        }
+    }
+
+    async fn call_with_p2c(
+        &self,
+        req: axum::http::Request<Body>,
+    ) -> Result<axum::http::Response<Body>, Infallible> {
+        // Get current proxy snapshot
+        let proxies = {
+            let guard = self.proxies_snapshot.read().unwrap();
+            Arc::clone(&*guard)
+        };
+
+        if proxies.is_empty() {
+            return Ok(axum::http::Response::builder()
+                .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
+                .body(Body::from("No upstream services available"))
+                .unwrap());
+        }
+
+        // Ensure metrics vector is up to date
+        self.ensure_metrics_size(proxies.len());
+
+        // Get metrics snapshot
+        let metrics = {
+            let guard = self.metrics.read().unwrap();
+            Arc::clone(&*guard)
+        };
+
+        // P2C: Pick two random services and choose the one with lower load
+        let selected_idx = if proxies.len() == 1 {
+            0
+        } else {
+            let mut rng = rand::rng();
+            let idx1 = rng.random_range(0..proxies.len());
+            let idx2 = loop {
+                let i = rng.random_range(0..proxies.len());
+                if i != idx1 {
+                    break i;
+                }
+            };
+
+            // Compare load metrics based on strategy
+            let load1 = self.get_load(&metrics[idx1]);
+            let load2 = self.get_load(&metrics[idx2]);
+
+            if load1 <= load2 {
+                idx1
+            } else {
+                idx2
+            }
+        };
+
+        // Track request start for pending requests
+        let request_guard = if matches!(self.strategy, LoadBalancingStrategy::P2cPendingRequests) {
+            metrics[selected_idx]
+                .pending_requests
+                .fetch_add(1, Ordering::Relaxed);
+            Some(PendingRequestGuard {
+                metrics: Arc::clone(&metrics[selected_idx]),
+            })
+        } else {
+            None
+        };
+
+        // Record start time for latency tracking
+        let start = Instant::now();
+
+        // Make the actual request
+        let mut proxy = proxies[selected_idx].clone();
+        let result = proxy.call(req).await;
+
+        // Update latency metrics for EWMA strategy
+        if matches!(self.strategy, LoadBalancingStrategy::P2cPeakEwma) {
+            let latency = start.elapsed();
+            self.update_ewma(&metrics[selected_idx], latency);
+        }
+
+        // Request guard will decrement pending count when dropped
+        drop(request_guard);
+
+        result
+    }
+
+    fn ensure_metrics_size(&self, size: usize) {
+        let mut metrics_guard = self.metrics.write().unwrap();
+        let current_metrics = Arc::clone(&*metrics_guard);
+
+        if current_metrics.len() != size {
+            let mut new_metrics = Vec::with_capacity(size);
+
+            // Copy existing metrics
+            for (i, metric) in current_metrics.iter().enumerate() {
+                if i < size {
+                    new_metrics.push(Arc::clone(metric));
+                }
+            }
+
+            // Add new metrics if needed
+            while new_metrics.len() < size {
+                new_metrics.push(Arc::new(ServiceMetrics::new()));
+            }
+
+            *metrics_guard = Arc::new(new_metrics);
+        }
+    }
+
+    fn get_load(&self, metrics: &ServiceMetrics) -> u64 {
+        match self.strategy {
+            LoadBalancingStrategy::P2cPendingRequests => {
+                metrics.pending_requests.load(Ordering::Relaxed) as u64
+            }
+            LoadBalancingStrategy::P2cPeakEwma => {
+                // Apply decay based on time since last update
+                let last_update = *metrics.last_update.lock().unwrap();
+                let elapsed = last_update.elapsed();
+
+                // Simple exponential decay: reduce by ~50% every 5 seconds
+                let current = metrics.peak_ewma_micros.load(Ordering::Relaxed);
+                let decay_factor = (-elapsed.as_secs_f64() / 5.0).exp();
+                (current as f64 * decay_factor) as u64
+            }
+            _ => unreachable!("CustomP2cBalancer should only be used with P2C strategies"),
+        }
+    }
+
+    fn update_ewma(&self, metrics: &ServiceMetrics, latency: Duration) {
+        let latency_micros = latency.as_micros() as u64;
+
+        // Update with exponential weighted moving average
+        // Using compare-and-swap loop for lock-free update
+        loop {
+            let current = metrics.peak_ewma_micros.load(Ordering::Relaxed);
+
+            // If this is the first measurement, just set it
+            if current == 0 {
+                if metrics
+                    .peak_ewma_micros
+                    .compare_exchange(0, latency_micros, Ordering::Relaxed, Ordering::Relaxed)
+                    .is_ok()
+                {
+                    *metrics.last_update.lock().unwrap() = Instant::now();
+                    break;
+                }
+                continue;
+            }
+
+            // Apply decay based on time since last update
+            let mut last_update_guard = metrics.last_update.lock().unwrap();
+            let elapsed = last_update_guard.elapsed();
+
+            // Decay factor: reduce by ~50% every 5 seconds
+            let decay_factor = (-elapsed.as_secs_f64() / 5.0).exp();
+            let decayed_current = (current as f64 * decay_factor) as u64;
+
+            // Peak EWMA: take the maximum of the decayed value and the new measurement
+            let peak = decayed_current.max(latency_micros);
+
+            // EWMA with alpha = 0.25 (25% new value, 75% old value)
+            // This gives more weight to recent measurements
+            let ewma = ((peak as f64 * 0.25) + (decayed_current as f64 * 0.75)) as u64;
+
+            if metrics
+                .peak_ewma_micros
+                .compare_exchange(current, ewma, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                // Update last update time
+                *last_update_guard = Instant::now();
+                break;
+            }
+            drop(last_update_guard); // Release lock before retrying
+        }
+    }
+}
+
+/// RAII guard to decrement pending request count when request completes
+struct PendingRequestGuard {
+    metrics: Arc<ServiceMetrics>,
+}
+
+impl Drop for PendingRequestGuard {
+    fn drop(&mut self) {
+        self.metrics
+            .pending_requests
+            .fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+/// Metrics for a single service used in P2C load balancing
+#[derive(Debug)]
+struct ServiceMetrics {
+    /// Number of pending requests (for P2cPendingRequests strategy)
+    pending_requests: AtomicUsize,
+    /// Peak EWMA latency in microseconds (for P2cPeakEwma strategy)
+    peak_ewma_micros: AtomicU64,
+    /// Last update time for EWMA decay calculation
+    last_update: std::sync::Mutex<Instant>,
+}
+
+impl ServiceMetrics {
+    fn new() -> Self {
+        Self {
+            pending_requests: AtomicUsize::new(0),
+            peak_ewma_micros: AtomicU64::new(0),
+            last_update: std::sync::Mutex::new(Instant::now()),
+        }
     }
 }

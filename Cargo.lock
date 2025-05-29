@@ -196,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "axum-reverse-proxy"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "async-stream",
  "axum",
@@ -212,6 +212,7 @@ dependencies = [
  "hyper-rustls",
  "hyper-tls 0.6.0",
  "hyper-util",
+ "rand 0.9.1",
  "reqwest",
  "serde_json",
  "sha1",

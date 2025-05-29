@@ -1,6 +1,6 @@
 [package]
 name = "axum-reverse-proxy"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "A flexible and efficient reverse proxy implementation for Axum web applications"
 license = "MIT"
@@ -30,6 +30,7 @@ tower = { version = "^0.5", features = ["full"] }
 tracing = "^0.1"
 url = "^2.5"
 hickory-resolver = { version = "0.25.2", optional = true }
+rand = "0.9.1"
 
 [dev-dependencies]
 async-stream = "^0.3"
