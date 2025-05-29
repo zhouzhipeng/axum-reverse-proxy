@@ -1,3 +1,5 @@
+#![cfg(feature = "dns")]
+
 use axum_reverse_proxy::{
     DiscoverableBalancedProxy, DnsDiscovery, DnsDiscoveryConfig, StaticDnsDiscovery,
 };
