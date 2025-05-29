@@ -453,6 +453,18 @@ async fn test_p2c_pending_requests_prefers_fast_service() {
     proxy.start_discovery().await;
     tokio::time::sleep(Duration::from_millis(50)).await;
 
+    // Send a few warm-up requests sequentially to help the algorithm learn latencies
+    for _ in 0..5 {
+        let svc = proxy.clone();
+        let req = axum::http::Request::builder()
+            .uri("/")
+            .body(Body::empty())
+            .unwrap();
+        let _ = svc.oneshot(req).await.unwrap();
+        // Small delay to ensure measurements are spaced out
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
     let mut handles = Vec::new();
     for _ in 0..20 {
         let svc = proxy.clone();
@@ -465,6 +477,8 @@ async fn test_p2c_pending_requests_prefers_fast_service() {
             let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
             String::from_utf8(body.to_vec()).unwrap()
         }));
+        // Small delay between spawning requests to let the algorithm observe pending counts
+        tokio::time::sleep(Duration::from_millis(5)).await;
     }
 
     let mut fast = 0;
@@ -531,6 +545,18 @@ async fn test_p2c_peak_ewma_prefers_fast_service() {
     );
     proxy.start_discovery().await;
     tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Send a few warm-up requests sequentially to help the algorithm learn latencies
+    for _ in 0..5 {
+        let svc = proxy.clone();
+        let req = axum::http::Request::builder()
+            .uri("/")
+            .body(Body::empty())
+            .unwrap();
+        let _ = svc.oneshot(req).await.unwrap();
+        // Small delay to ensure measurements are spaced out
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 
     let mut handles = Vec::new();
     for _ in 0..20 {
