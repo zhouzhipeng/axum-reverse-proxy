@@ -303,6 +303,8 @@
 //! The `native-tls` feature is a separate opt-in and is not included in the `full` feature set.
 
 mod balanced_proxy;
+#[cfg(any(feature = "tls", feature = "native-tls"))]
+mod danger;
 #[cfg(feature = "dns")]
 mod dns_discovery;
 mod proxy;
@@ -316,6 +318,10 @@ pub use balanced_proxy::DiscoverableBalancedProxy;
 pub use balanced_proxy::LoadBalancingStrategy;
 pub use balanced_proxy::StandardBalancedProxy;
 pub use balanced_proxy::StandardDiscoverableBalancedProxy;
+#[cfg(feature = "native-tls")]
+pub use danger::create_dangerous_native_tls_connector;
+#[cfg(all(feature = "tls", not(feature = "native-tls")))]
+pub use danger::create_dangerous_rustls_config;
 #[cfg(feature = "dns")]
 pub use dns_discovery::{DnsDiscovery, DnsDiscoveryConfig, StaticDnsDiscovery};
 pub use proxy::ReverseProxy;
