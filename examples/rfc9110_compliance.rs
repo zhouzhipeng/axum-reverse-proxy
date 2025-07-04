@@ -21,7 +21,7 @@ async fn main() {
     });
 
     // Create a reverse proxy with RFC9110 compliance
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let mut server_names = HashSet::new();
     server_names.insert("localhost".to_string());
     server_names.insert("127.0.0.1".to_string());
@@ -40,7 +40,7 @@ async fn main() {
     // Start the proxy server
     let proxy_listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
     let proxy_addr = proxy_listener.local_addr().unwrap();
-    println!("Proxy server listening on {}", proxy_addr);
+    println!("Proxy server listening on {proxy_addr}");
 
     axum::serve(proxy_listener, app).await.unwrap();
 }

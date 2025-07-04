@@ -45,7 +45,7 @@ async fn test_discoverable_proxy_into_router() {
         axum::serve(upstream_listener, upstream_app).await.unwrap();
     });
 
-    let discovery_stream = SingleDiscovery::new(format!("http://{}", upstream_addr));
+    let discovery_stream = SingleDiscovery::new(format!("http://{upstream_addr}"));
 
     let connector = HttpConnector::new();
     let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
@@ -70,7 +70,7 @@ async fn test_discoverable_proxy_into_router() {
     let client = reqwest::Client::new();
 
     let resp = client
-        .get(format!("http://{}/api/test", addr))
+        .get(format!("http://{addr}/api/test"))
         .send()
         .await
         .unwrap();
@@ -78,7 +78,7 @@ async fn test_discoverable_proxy_into_router() {
     assert_eq!(resp.text().await.unwrap(), "upstream");
 
     let resp = client
-        .get(format!("http://{}/", addr))
+        .get(format!("http://{addr}/"))
         .send()
         .await
         .unwrap();
@@ -86,7 +86,7 @@ async fn test_discoverable_proxy_into_router() {
     assert_eq!(resp.text().await.unwrap(), "root");
 
     let resp = client
-        .get(format!("http://{}/other", addr))
+        .get(format!("http://{addr}/other"))
         .send()
         .await
         .unwrap();

@@ -60,7 +60,7 @@ async fn create_test_server(port: u16, response_body: String) -> String {
         }),
     );
 
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
+    let listener = TcpListener::bind(format!("127.0.0.1:{port}"))
         .await
         .unwrap();
     let addr = listener.local_addr().unwrap();
@@ -176,7 +176,7 @@ async fn test_discoverable_proxy_load_balancing() {
     // Each server should have received exactly 3 requests (round-robin)
     assert_eq!(server_responses.len(), 3);
     for (server, count) in server_responses {
-        println!("Server '{}' received {} requests", server, count);
+        println!("Server '{server}' received {count} requests");
         assert_eq!(count, 3);
     }
 }

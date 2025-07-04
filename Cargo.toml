@@ -1,7 +1,7 @@
 [package]
 name = "axum-reverse-proxy"
 version = "1.0.2"
-edition = "2021"
+edition = "2024"
 description = "A flexible and efficient reverse proxy implementation for Axum web applications"
 license = "MIT"
 repository = "https://github.com/tom-lubenow/axum-reverse-proxy"

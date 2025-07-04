@@ -18,7 +18,7 @@ async fn test_no_retry_by_default() {
     let addr = temp.local_addr().unwrap();
     drop(temp);
 
-    let proxy = ReverseProxy::new("/", &format!("http://{}", addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -32,7 +32,7 @@ async fn test_no_retry_by_default() {
 
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("http://{}/test", proxy_addr))
+        .get(format!("http://{proxy_addr}/test"))
         .send()
         .await
         .unwrap();
@@ -49,7 +49,7 @@ async fn test_retry_layer() {
     let addr = temp.local_addr().unwrap();
     drop(temp);
 
-    let proxy = ReverseProxy::new("/", &format!("http://{}", addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{addr}"));
     let app: Router = proxy.into();
     let app = app.layer(ServiceBuilder::new().layer(RetryLayer::new(5)));
 
@@ -63,7 +63,7 @@ async fn test_retry_layer() {
 
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("http://{}/test", proxy_addr))
+        .get(format!("http://{proxy_addr}/test"))
         .send()
         .await
         .unwrap();
@@ -80,7 +80,7 @@ async fn test_retry_layer_zero_attempts() {
     let addr = temp.local_addr().unwrap();
     drop(temp);
 
-    let proxy = ReverseProxy::new("/", &format!("http://{}", addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{addr}"));
     let app: Router = proxy.into();
     let app = app.layer(ServiceBuilder::new().layer(RetryLayer::new(0)));
 
@@ -94,7 +94,7 @@ async fn test_retry_layer_zero_attempts() {
 
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("http://{}/test", proxy_addr))
+        .get(format!("http://{proxy_addr}/test"))
         .send()
         .await
         .unwrap();

@@ -399,7 +399,7 @@ async fn test_load_balancing_strategy_enum() {
 
     // Test debug formatting
     let strategy = LoadBalancingStrategy::P2cPendingRequests;
-    let debug_str = format!("{:?}", strategy);
+    let debug_str = format!("{strategy:?}");
     assert!(debug_str.contains("P2cPendingRequests"));
 }
 #[tokio::test]
@@ -491,7 +491,7 @@ async fn test_p2c_pending_requests_prefers_fast_service() {
         }
     }
 
-    assert!(fast > slow, "fast {} slow {}", fast, slow);
+    assert!(fast > slow, "fast {fast} slow {slow}");
 
     fast_server.abort();
     slow_server.abort();
@@ -582,7 +582,7 @@ async fn test_p2c_peak_ewma_prefers_fast_service() {
         }
     }
 
-    assert!(fast > slow, "fast {} slow {}", fast, slow);
+    assert!(fast > slow, "fast {fast} slow {slow}");
 
     fast_server.abort();
     slow_server.abort();
