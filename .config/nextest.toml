@@ -1,0 +1,22 @@
+# Configuration for cargo-nextest
+# https://nexte.st/docs/configuration/
+
+[profile.default]
+# Print out output for failing tests as soon as they fail, and also at the end
+# of the run (for easy scrollability).
+failure-output = "immediate-final"
+# Show skipped tests in the default output.
+status-level = "skip"
+# Up to 12 tests can run at the same time.
+test-threads = 12
+
+[profile.ci]
+# Print out output for failing tests as soon as they fail, and also at the end
+# of the run (for easy scrollability).
+failure-output = "immediate-final"
+# Do not cancel the test run on the first failure.
+fail-fast = false
+
+# Configure JUnit XML report for CI
+[profile.ci.junit]
+path = "junit.xml"

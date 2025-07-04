@@ -243,6 +243,34 @@ Check out the [examples](examples/) directory for more usage examples:
 - [Balanced Proxy](examples/balanced.rs) - Forward to multiple upstream servers with round-robin load balancing
 - **Note:** very large requests may still need buffering depending on the body wrapper's strategy.
 
+## Development
+
+### Running Tests
+
+This project uses [cargo-nextest](https://nexte.st/) for faster test execution. To install nextest:
+
+```bash
+# Install pre-built binary (recommended)
+cargo install cargo-nextest --locked
+```
+
+To run tests:
+
+```bash
+# Run all tests
+cargo nextest run
+
+# Run tests with all features enabled
+cargo nextest run --features full
+
+# Run doctests separately (nextest doesn't support doctests yet)
+cargo test --doc
+```
+
+### CI Configuration
+
+The CI pipeline automatically runs tests using nextest. See `.github/workflows/ci.yml` for the full configuration.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
