@@ -1,7 +1,7 @@
 use axum::{
-    body::{to_bytes, Body},
-    http::{Method, Request, StatusCode},
     Router,
+    body::{Body, to_bytes},
+    http::{Method, Request, StatusCode},
 };
 use axum_reverse_proxy::{ReverseProxy, Rfc9110Config, Rfc9110Layer};
 use http::HeaderValue;
@@ -363,13 +363,15 @@ async fn test_via_header_with_comments() {
     let response = app.clone().oneshot(request).await.unwrap();
 
     // Comments should be preserved
-    assert!(response
-        .headers()
-        .get("via")
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .contains("("));
+    assert!(
+        response
+            .headers()
+            .get("via")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains("(")
+    );
 }
 
 #[tokio::test]

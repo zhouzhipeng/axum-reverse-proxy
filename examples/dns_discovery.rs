@@ -1,6 +1,6 @@
-use axum::{serve, Router};
+use axum::{Router, serve};
 use axum_reverse_proxy::{DiscoverableBalancedProxy, DnsDiscovery, DnsDiscoveryConfig};
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use std::time::Duration;
 use tokio::net::TcpListener;
 
@@ -62,6 +62,8 @@ async fn main() {
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Server running on http://localhost:3000");
     println!("Try: curl http://localhost:3000/api/get");
-    println!("The proxy will automatically load balance across all IP addresses resolved for httpbin.org");
+    println!(
+        "The proxy will automatically load balance across all IP addresses resolved for httpbin.org"
+    );
     serve(listener, app).await.unwrap();
 }

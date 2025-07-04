@@ -1,7 +1,7 @@
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use axum_reverse_proxy::DiscoverableBalancedProxy;
 use futures_util::stream::Stream;
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -77,11 +77,7 @@ async fn test_discoverable_proxy_into_router() {
     assert_eq!(resp.status().as_u16(), 200);
     assert_eq!(resp.text().await.unwrap(), "upstream");
 
-    let resp = client
-        .get(format!("http://{addr}/"))
-        .send()
-        .await
-        .unwrap();
+    let resp = client.get(format!("http://{addr}/")).send().await.unwrap();
     assert_eq!(resp.status().as_u16(), 200);
     assert_eq!(resp.text().await.unwrap(), "root");
 

@@ -1,4 +1,4 @@
-use axum::{serve, Router};
+use axum::{Router, serve};
 use axum_reverse_proxy::ReverseProxy;
 use tokio::net::TcpListener;
 

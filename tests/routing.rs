@@ -1,6 +1,6 @@
-use axum::{body::Body, extract::State, http::Request, response::Json, routing::get, Router};
+use axum::{Router, body::Body, extract::State, http::Request, response::Json, routing::get};
 use axum_reverse_proxy::ReverseProxy;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 

@@ -1,15 +1,15 @@
-use axum::{body::Body, response::Response, routing::get, Router};
+use axum::{Router, body::Body, response::Response, routing::get};
 use axum_reverse_proxy::DiscoverableBalancedProxy;
 use futures_util::stream::Stream;
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::net::TcpListener;
-use tower::discover::Change;
 use tower::Service;
+use tower::discover::Change;
 
 /// A discovery stream that adds services dynamically
 #[derive(Clone)]

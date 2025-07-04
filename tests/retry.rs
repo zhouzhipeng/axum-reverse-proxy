@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use axum_reverse_proxy::{RetryLayer, ReverseProxy};
 use std::time::Duration;
 use tokio::net::TcpListener;

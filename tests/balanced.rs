@@ -1,13 +1,13 @@
 use axum::{
+    Router,
     body::Body,
     extract::Json,
     http::{Request, StatusCode},
     routing::get,
-    Router,
 };
 use axum_reverse_proxy::BalancedProxy;
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 use tokio::net::TcpListener;
 
 #[tokio::test]

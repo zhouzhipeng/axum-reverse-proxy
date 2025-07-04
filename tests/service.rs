@@ -1,12 +1,12 @@
 use axum::{
-    body::{to_bytes, Body},
+    Router,
+    body::{Body, to_bytes},
     extract::Json,
     http::{Request, StatusCode},
     routing::{get, post},
-    Router,
 };
 use axum_reverse_proxy::ReverseProxy;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tower::ServiceExt;
 

@@ -1,8 +1,8 @@
 use axum::{
+    Router,
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     response::IntoResponse,
     routing::get,
-    Router,
 };
 use axum_reverse_proxy::ReverseProxy;
 use futures_util::{SinkExt, StreamExt};

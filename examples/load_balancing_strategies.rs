@@ -1,7 +1,7 @@
-use axum::{serve, Router};
+use axum::{Router, serve};
 use axum_reverse_proxy::{DiscoverableBalancedProxy, LoadBalancingStrategy};
 use futures_util::stream::Stream;
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -111,7 +111,9 @@ async fn main() {
         "Services discovered: {}",
         p2c_pending_proxy.service_count().await
     );
-    println!("Description: Uses Power of Two Choices algorithm with pending request count as load metric");
+    println!(
+        "Description: Uses Power of Two Choices algorithm with pending request count as load metric"
+    );
     println!("Best for: Services with varying request processing times");
     println!("Note: Currently falls back to round-robin (P2C implementation pending)");
 

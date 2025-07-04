@@ -4,13 +4,13 @@ use hyper_rustls::HttpsConnector;
 #[cfg(feature = "native-tls")]
 use hyper_tls::HttpsConnector as NativeTlsHttpsConnector;
 use hyper_util::client::legacy::{
-    connect::{Connect, HttpConnector},
     Client,
+    connect::{Connect, HttpConnector},
 };
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use tower::discover::{Change, Discover};
@@ -488,11 +488,7 @@ impl<C: Connect + Clone + Send + Sync + 'static> CustomP2cBalancer<C> {
             let load1 = self.get_load(&metrics[idx1]);
             let load2 = self.get_load(&metrics[idx2]);
 
-            if load1 <= load2 {
-                idx1
-            } else {
-                idx2
-            }
+            if load1 <= load2 { idx1 } else { idx2 }
         };
 
         // Track request start for pending requests

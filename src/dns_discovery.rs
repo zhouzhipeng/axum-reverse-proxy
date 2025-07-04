@@ -1,8 +1,8 @@
 use futures_util::stream::Stream;
 use hickory_resolver::{
+    Resolver,
     config::{ResolverConfig, ResolverOpts},
     name_server::TokioConnectionProvider,
-    Resolver,
 };
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::time::{interval, MissedTickBehavior};
+use tokio::time::{MissedTickBehavior, interval};
 use tower::discover::Change;
 use tracing::{debug, error, trace};
 
