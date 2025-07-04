@@ -1,6 +1,6 @@
 use axum_reverse_proxy::{DiscoverableBalancedProxy, LoadBalancingStrategy};
 use futures_util::stream::Stream;
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -405,11 +405,11 @@ async fn test_load_balancing_strategy_enum() {
 #[tokio::test]
 async fn test_p2c_pending_requests_prefers_fast_service() {
     use axum::{
-        body::{to_bytes, Body},
-        routing::get,
         Router,
+        body::{Body, to_bytes},
+        routing::get,
     };
-    use hyper_util::client::legacy::{connect::HttpConnector, Client};
+    use hyper_util::client::legacy::{Client, connect::HttpConnector};
     use std::time::Duration;
     use tokio::net::TcpListener;
     use tower::ServiceExt;
@@ -500,11 +500,11 @@ async fn test_p2c_pending_requests_prefers_fast_service() {
 #[tokio::test]
 async fn test_p2c_peak_ewma_prefers_fast_service() {
     use axum::{
-        body::{to_bytes, Body},
-        routing::get,
         Router,
+        body::{Body, to_bytes},
+        routing::get,
     };
-    use hyper_util::client::legacy::{connect::HttpConnector, Client};
+    use hyper_util::client::legacy::{Client, connect::HttpConnector};
     use std::time::Duration;
     use tokio::net::TcpListener;
     use tower::ServiceExt;

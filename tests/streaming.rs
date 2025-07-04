@@ -1,11 +1,11 @@
-use axum::{body::Body, extract::Request, routing::post, Router};
+use axum::{Router, body::Body, extract::Request, routing::post};
 use axum_reverse_proxy::ReverseProxy;
 use bytes::Bytes;
 use futures_util::StreamExt;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::net::TcpListener;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use tower::ServiceExt;
 
 #[tokio::test]

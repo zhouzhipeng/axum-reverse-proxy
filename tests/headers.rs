@@ -1,7 +1,7 @@
-use axum::{body::Body, http::Request, response::Json, routing::get, Router};
+use axum::{Router, body::Body, http::Request, response::Json, routing::get};
 use axum_reverse_proxy::ReverseProxy;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{net::TcpListener, sync::Notify};
 

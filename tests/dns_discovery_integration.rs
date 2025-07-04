@@ -4,7 +4,7 @@ use axum_reverse_proxy::{
     DiscoverableBalancedProxy, DnsDiscovery, DnsDiscoveryConfig, StaticDnsDiscovery,
 };
 use futures_util::StreamExt;
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use std::time::Duration;
 use tower::discover::Change;
 

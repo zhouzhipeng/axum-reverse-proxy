@@ -1,7 +1,7 @@
-use axum::{serve, Router};
+use axum::{Router, serve};
 use axum_reverse_proxy::DiscoverableBalancedProxy;
 use futures_util::stream::Stream;
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;

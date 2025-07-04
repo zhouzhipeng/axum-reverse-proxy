@@ -1,4 +1,4 @@
-use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
+use axum::{Router, http::StatusCode, response::IntoResponse, routing::get};
 use axum_reverse_proxy::ReverseProxy;
 use std::time::Duration;
 use tokio::net::TcpListener;

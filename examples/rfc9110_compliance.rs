@@ -1,6 +1,6 @@
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 use axum_reverse_proxy::{ReverseProxy, Rfc9110Config, Rfc9110Layer};
 use std::collections::HashSet;

@@ -6,8 +6,8 @@ use hyper_rustls::HttpsConnector;
 #[cfg(feature = "native-tls")]
 use hyper_tls::HttpsConnector as NativeTlsHttpsConnector;
 use hyper_util::client::legacy::{
-    connect::{Connect, HttpConnector},
     Client,
+    connect::{Connect, HttpConnector},
 };
 use std::convert::Infallible;
 use tracing::{error, trace};

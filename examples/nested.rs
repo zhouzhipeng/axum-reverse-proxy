@@ -1,8 +1,8 @@
-use axum::{extract::State, response::IntoResponse, routing::get, serve, Router};
+use axum::{Router, extract::State, response::IntoResponse, routing::get, serve};
 use axum_reverse_proxy::ReverseProxy;
 use serde_json::json;
 use tokio::net::TcpListener;
-use tracing::{info, Level};
+use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
 
 // Our app state type

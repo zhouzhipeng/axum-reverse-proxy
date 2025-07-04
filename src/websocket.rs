@@ -1,11 +1,11 @@
 use axum::{body::Body, http::Request, response::Response};
-use base64::{engine::general_purpose::STANDARD, Engine};
-use futures_util::{stream::StreamExt, SinkExt};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use futures_util::{SinkExt, stream::StreamExt};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use hyper_util::rt::TokioIo;
 use sha1::{Digest, Sha1};
 use tokio::sync::mpsc;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 use tokio_tungstenite::{
     connect_async,
     tungstenite::{Error, Message},
@@ -40,7 +40,9 @@ pub(crate) fn is_websocket_upgrade(headers: &HeaderMap<HeaderValue>) -> bool {
     let has_websocket_key = headers.contains_key("sec-websocket-key");
     let has_websocket_version = headers.contains_key("sec-websocket-version");
 
-    trace!("is_websocket_upgrade - upgrade: {has_upgrade}, connection: {has_connection}, websocket key: {has_websocket_key}, websocket version: {has_websocket_version}");
+    trace!(
+        "is_websocket_upgrade - upgrade: {has_upgrade}, connection: {has_connection}, websocket key: {has_websocket_key}, websocket version: {has_websocket_version}"
+    );
     has_upgrade && has_connection && has_websocket_key && has_websocket_version
 }
 

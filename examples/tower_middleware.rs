@@ -1,4 +1,4 @@
-use axum::{body::Body, extract::State, response::IntoResponse, routing::get, serve, Router};
+use axum::{Router, body::Body, extract::State, response::IntoResponse, routing::get, serve};
 use axum_reverse_proxy::ReverseProxy;
 use http::Request;
 use serde_json::json;
@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{timeout::TimeoutLayer, validate_request::ValidateRequestHeaderLayer};
-use tracing::{info, Level};
+use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
 
 // Our app state type

@@ -1,11 +1,11 @@
 #![allow(unused_must_use)]
 
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 use axum_reverse_proxy::ReverseProxy;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use hyper::StatusCode;
 use std::sync::Arc;
 use tokio::net::TcpListener;

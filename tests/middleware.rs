@@ -1,13 +1,13 @@
 use axum::{
+    Router,
     body::Body,
     http::{Request, StatusCode},
     response::Json,
     routing::get,
-    Router,
 };
 use axum_reverse_proxy::ReverseProxy;
 use http::header::{HeaderName, HeaderValue};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
