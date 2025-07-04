@@ -49,7 +49,7 @@ pub(crate) fn compute_host_header(url: &str) -> (String, u16) {
     let url = Url::parse(url).unwrap();
     let scheme = url.scheme();
     let host = match url.host().unwrap() {
-        Host::Ipv6(addr) => format!("[{}]", addr),
+        Host::Ipv6(addr) => format!("[{addr}]"),
         Host::Ipv4(addr) => addr.to_string(),
         Host::Domain(s) => s.to_string(),
     };
@@ -66,7 +66,7 @@ pub(crate) fn compute_host_header(url: &str) -> (String, u16) {
     let header = if (scheme == "wss" && port == 443) || (scheme == "ws" && port == 80) {
         host.clone()
     } else {
-        format!("{}:{}", host, port)
+        format!("{host}:{port}")
     };
     (header, port)
 }
@@ -106,7 +106,7 @@ pub(crate) async fn handle_websocket(
 
     // Convert the target URL to WebSocket URL
     let upstream_url = if target.starts_with("ws://") || target.starts_with("wss://") {
-        format!("{}{}", target, path_and_query)
+        format!("{target}{path_and_query}")
     } else {
         let (scheme, rest) = if target.starts_with("https://") {
             ("wss://", target.trim_start_matches("https://"))
@@ -122,7 +122,7 @@ pub(crate) async fn handle_websocket(
     let url = Url::parse(&upstream_url)?;
     let scheme = url.scheme();
     let host = match url.host().ok_or("Missing host in URL")? {
-        Host::Ipv6(addr) => format!("[{}]", addr),
+        Host::Ipv6(addr) => format!("[{addr}]"),
         Host::Ipv4(addr) => addr.to_string(),
         Host::Domain(s) => s.to_string(),
     };
@@ -139,7 +139,7 @@ pub(crate) async fn handle_websocket(
     let host_header = if (scheme == "wss" && port == 443) || (scheme == "ws" && port == 80) {
         host.clone()
     } else {
-        format!("{}:{}", host, port)
+        format!("{host}:{port}")
     };
 
     // Forward all headers except host to upstream

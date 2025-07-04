@@ -34,7 +34,7 @@ async fn test_round_robin_distribution() {
     let client = reqwest::Client::new();
     for expected in [1, 2, 1, 2] {
         let res = client
-            .get(format!("http://{}/", proxy_addr))
+            .get(format!("http://{proxy_addr}/"))
             .send()
             .await
             .unwrap();
@@ -110,7 +110,7 @@ async fn test_balanced_proxy_path_stripping() {
     let test_paths = ["/foo", "/bar/baz", "/baz"];
 
     for path in test_paths {
-        let url = format!("http://{}/api{}", proxy_addr, path);
+        let url = format!("http://{proxy_addr}/api{path}");
 
         let res = client.get(&url).send().await.unwrap();
         assert_eq!(res.status().as_u16(), StatusCode::OK.as_u16());

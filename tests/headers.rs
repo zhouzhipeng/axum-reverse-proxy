@@ -31,7 +31,7 @@ async fn test_proxy_header_handling() {
     server_ready.notified().await;
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -57,8 +57,8 @@ async fn test_proxy_header_handling() {
     let mut headers = HeaderMap::new();
     for i in 0..10 {
         headers.insert(
-            HeaderName::from_bytes(format!("x-test-{}", i).as_bytes()).unwrap(),
-            HeaderValue::from_str(&format!("value-{}", i)).unwrap(),
+            HeaderName::from_bytes(format!("x-test-{i}").as_bytes()).unwrap(),
+            HeaderValue::from_str(&format!("value-{i}")).unwrap(),
         );
     }
 
@@ -66,14 +66,14 @@ async fn test_proxy_header_handling() {
     let test_result = tokio::time::timeout(Duration::from_secs(10), async {
         println!("Sending request to proxy...");
         let response = match client
-            .get(format!("http://{}/headers", proxy_addr))
+            .get(format!("http://{proxy_addr}/headers"))
             .headers(headers.clone())
             .send()
             .await
         {
             Ok(r) => r,
             Err(e) => {
-                println!("Failed to send request: {}", e);
+                println!("Failed to send request: {e}");
                 return Err(e);
             }
         };
@@ -83,11 +83,11 @@ async fn test_proxy_header_handling() {
 
         let body = match response.json::<Value>().await {
             Ok(b) => {
-                println!("Response body: {}", b);
+                println!("Response body: {b}");
                 b
             }
             Err(e) => {
-                println!("Failed to parse response as JSON: {}", e);
+                println!("Failed to parse response as JSON: {e}");
                 return Err(e);
             }
         };
@@ -117,7 +117,7 @@ async fn test_proxy_header_handling() {
     match test_result {
         Ok(result) => {
             if let Err(e) = result {
-                panic!("Test failed with error: {}", e);
+                panic!("Test failed with error: {e}");
             }
         }
         Err(_) => panic!("Test timed out after 10 seconds"),
@@ -143,7 +143,7 @@ async fn test_proxy_special_headers() {
     server_ready.notified().await;
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -169,7 +169,7 @@ async fn test_proxy_special_headers() {
     let test_result = tokio::time::timeout(Duration::from_secs(10), async {
         println!("Testing special headers...");
         let response = client
-            .get(format!("http://{}/headers", proxy_addr))
+            .get(format!("http://{proxy_addr}/headers"))
             .header("X-Forwarded-For", "192.168.1.1")
             .header("X-Real-IP", "192.168.1.1")
             .header("X-Request-ID", "test-request-1")
@@ -181,7 +181,7 @@ async fn test_proxy_special_headers() {
         assert_eq!(response.status().as_u16(), 200);
 
         let body = response.json::<Value>().await?;
-        println!("Response body: {}", body);
+        println!("Response body: {body}");
 
         // Verify the headers were forwarded
         let headers = body["headers"].as_object().unwrap();
@@ -202,7 +202,7 @@ async fn test_proxy_special_headers() {
     match test_result {
         Ok(result) => {
             if let Err(e) = result {
-                panic!("Test failed with error: {}", e);
+                panic!("Test failed with error: {e}");
             }
         }
         Err(_) => panic!("Test timed out after 10 seconds"),

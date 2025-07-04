@@ -23,7 +23,7 @@ async fn test_proxy_get_request() {
     });
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -37,7 +37,7 @@ async fn test_proxy_get_request() {
 
     // Send a request through the proxy
     let response = client
-        .get(format!("http://{}/test", proxy_addr))
+        .get(format!("http://{proxy_addr}/test"))
         .send()
         .await
         .unwrap();
@@ -66,7 +66,7 @@ async fn test_proxy_post_request() {
     });
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -81,7 +81,7 @@ async fn test_proxy_post_request() {
     // Send a request through the proxy
     let test_body = json!({"message": "Hello, proxy!"});
     let response = client
-        .post(format!("http://{}/echo", proxy_addr))
+        .post(format!("http://{proxy_addr}/echo"))
         .json(&test_body)
         .send()
         .await
@@ -111,7 +111,7 @@ async fn test_proxy_large_payload() {
     });
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -129,7 +129,7 @@ async fn test_proxy_large_payload() {
 
     // Send a request through the proxy
     let response = client
-        .post(format!("http://{}/echo", proxy_addr))
+        .post(format!("http://{proxy_addr}/echo"))
         .json(&test_body)
         .send()
         .await
@@ -159,7 +159,7 @@ async fn test_proxy_http2_support() {
     });
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -176,7 +176,7 @@ async fn test_proxy_http2_support() {
 
     // Send a request through the proxy
     let response = client
-        .get(format!("http://{}/test", proxy_addr))
+        .get(format!("http://{proxy_addr}/test"))
         .send()
         .await
         .unwrap();

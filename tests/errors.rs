@@ -21,7 +21,7 @@ async fn test_proxy_timeout() {
     });
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -38,7 +38,7 @@ async fn test_proxy_timeout() {
 
     // Send a request through the proxy
     let response = client
-        .get(format!("http://{}/delay", proxy_addr))
+        .get(format!("http://{proxy_addr}/delay"))
         .send()
         .await;
 
@@ -69,7 +69,7 @@ async fn test_proxy_error_handling() {
     });
 
     let response = client
-        .get(format!("http://{}/test", proxy_addr))
+        .get(format!("http://{proxy_addr}/test"))
         .send()
         .await
         .unwrap();
@@ -114,7 +114,7 @@ async fn test_proxy_upstream_errors() {
     });
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -138,7 +138,7 @@ async fn test_proxy_upstream_errors() {
 
     for (status_code, expected_body) in test_cases {
         let response = client
-            .get(format!("http://{}/{}", proxy_addr, status_code))
+            .get(format!("http://{proxy_addr}/{status_code}"))
             .send()
             .await
             .unwrap();

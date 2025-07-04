@@ -54,7 +54,7 @@ async fn setup_test_server() -> (SocketAddr, SocketAddr) {
     });
 
     // Create the proxy server
-    let proxy = ReverseProxy::new("/", &format!("http://{}", upstream_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{upstream_addr}"));
     let proxy_app: Router = proxy.into();
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let proxy_addr = proxy_listener.local_addr().unwrap();
@@ -110,7 +110,7 @@ fn websocket_benchmark(c: &mut Criterion) {
     let message_sizes = [10, 100, 1000, 10000];
     let mut group = c.benchmark_group("websocket_echo");
     for size in message_sizes {
-        group.bench_function(format!("{}_bytes", size), |b| {
+        group.bench_function(format!("{size}_bytes"), |b| {
             b.iter_custom(|iters| {
                 rt.block_on(async {
                     let start = std::time::Instant::now();
@@ -128,7 +128,7 @@ fn websocket_benchmark(c: &mut Criterion) {
     let concurrent_counts = [1, 5, 10, 20];
     let mut group = c.benchmark_group("websocket_concurrent");
     for count in concurrent_counts {
-        group.bench_function(format!("{}_connections", count), |b| {
+        group.bench_function(format!("{count}_connections"), |b| {
             b.iter_custom(|iters| {
                 rt.block_on(async {
                     let start = std::time::Instant::now();

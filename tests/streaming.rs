@@ -38,7 +38,7 @@ async fn test_streaming_behavior() {
         axum::serve(listener, echo).await.unwrap();
     });
 
-    let proxy = ReverseProxy::new("/", format!("http://{}", addr).as_str());
+    let proxy = ReverseProxy::new("/", format!("http://{addr}").as_str());
     let app: Router = proxy.into();
 
     // Create a body that sends chunks with delays

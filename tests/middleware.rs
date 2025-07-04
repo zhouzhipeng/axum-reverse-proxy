@@ -35,7 +35,7 @@ async fn test_proxy_with_middleware() {
     });
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let proxy_router: Router = proxy.into();
 
     // Add middleware stack
@@ -66,7 +66,7 @@ async fn test_proxy_with_middleware() {
 
     // Test 1: Request without auth token should fail
     let response = client
-        .get(format!("http://{}/headers", proxy_addr))
+        .get(format!("http://{proxy_addr}/headers"))
         .send()
         .await
         .unwrap();
@@ -77,7 +77,7 @@ async fn test_proxy_with_middleware() {
 
     // Test 2: Request with auth token should succeed and include custom header
     let response = client
-        .get(format!("http://{}/headers", proxy_addr))
+        .get(format!("http://{proxy_addr}/headers"))
         .header("Authorization", "Bearer test-token")
         .send()
         .await
@@ -129,7 +129,7 @@ async fn test_proxy_timeout_middleware() {
     });
 
     // Create a reverse proxy with a short timeout
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let proxy_router: Router = proxy.into();
 
     // Add timeout middleware
@@ -146,7 +146,7 @@ async fn test_proxy_timeout_middleware() {
 
     // Test: Request should timeout
     let response = client
-        .get(format!("http://{}/slow", proxy_addr))
+        .get(format!("http://{proxy_addr}/slow"))
         .send()
         .await
         .unwrap();

@@ -19,7 +19,7 @@ async fn test_proxy_nested_routing() {
     });
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/proxy", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/proxy", &format!("http://{test_addr}"));
 
     // Create an app state
     #[derive(Clone)]
@@ -53,7 +53,7 @@ async fn test_proxy_nested_routing() {
 
     // Test root endpoint with app state
     let response = client
-        .get(format!("http://{}/", proxy_addr))
+        .get(format!("http://{proxy_addr}/"))
         .send()
         .await
         .unwrap();
@@ -64,7 +64,7 @@ async fn test_proxy_nested_routing() {
 
     // Test proxied endpoint
     let response = client
-        .get(format!("http://{}/proxy/test", proxy_addr))
+        .get(format!("http://{proxy_addr}/proxy/test"))
         .send()
         .await
         .unwrap();
@@ -94,7 +94,7 @@ async fn test_proxy_path_handling() {
     });
 
     // Create a reverse proxy with empty path
-    let proxy = ReverseProxy::new("", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -108,7 +108,7 @@ async fn test_proxy_path_handling() {
 
     // Test root path
     let response = client
-        .get(format!("http://{}/", proxy_addr))
+        .get(format!("http://{proxy_addr}/"))
         .send()
         .await
         .unwrap();
@@ -117,7 +117,7 @@ async fn test_proxy_path_handling() {
 
     // Test double slashes
     let response = client
-        .get(format!("http://{}/test//double", proxy_addr))
+        .get(format!("http://{proxy_addr}/test//double"))
         .send()
         .await
         .unwrap();
@@ -126,7 +126,7 @@ async fn test_proxy_path_handling() {
 
     // Test URL-encoded space
     let response = client
-        .get(format!("http://{}/test/%20space", proxy_addr))
+        .get(format!("http://{proxy_addr}/test/%20space"))
         .send()
         .await
         .unwrap();
@@ -135,7 +135,7 @@ async fn test_proxy_path_handling() {
 
     // Test special characters
     let response = client
-        .get(format!("http://{}/test/special!%40%23%24", proxy_addr))
+        .get(format!("http://{proxy_addr}/test/special!%40%23%24"))
         .send()
         .await
         .unwrap();
@@ -166,8 +166,8 @@ async fn test_proxy_multiple_states() {
     });
 
     // Create proxies with different paths
-    let proxy1 = ReverseProxy::new("/api1", &format!("http://{}", addr1));
-    let proxy2 = ReverseProxy::new("/api2", &format!("http://{}", addr2));
+    let proxy1 = ReverseProxy::new("/api1", &format!("http://{addr1}"));
+    let proxy2 = ReverseProxy::new("/api2", &format!("http://{addr2}"));
 
     // Create app state
     #[derive(Clone)]
@@ -202,7 +202,7 @@ async fn test_proxy_multiple_states() {
 
     // Test root endpoint with app state
     let response = client
-        .get(format!("http://{}/", proxy_addr))
+        .get(format!("http://{proxy_addr}/"))
         .send()
         .await
         .unwrap();
@@ -213,7 +213,7 @@ async fn test_proxy_multiple_states() {
 
     // Test first proxy
     let response = client
-        .get(format!("http://{}/api1/test", proxy_addr))
+        .get(format!("http://{proxy_addr}/api1/test"))
         .send()
         .await
         .unwrap();
@@ -223,7 +223,7 @@ async fn test_proxy_multiple_states() {
 
     // Test second proxy
     let response = client
-        .get(format!("http://{}/api2/test", proxy_addr))
+        .get(format!("http://{proxy_addr}/api2/test"))
         .send()
         .await
         .unwrap();
@@ -262,14 +262,14 @@ async fn test_proxy_exact_path_handling() {
 
     // Create a reverse proxy that maps /api to the test server
     let app: Router = Router::new()
-        .merge(ReverseProxy::new("/api", &format!("http://{}", test_addr)))
+        .merge(ReverseProxy::new("/api", &format!("http://{test_addr}")))
         .merge(ReverseProxy::new(
             "/_test",
-            &format!("http://{}/_test", test_addr),
+            &format!("http://{test_addr}/_test"),
         ))
         .merge(ReverseProxy::new(
             "/foo",
-            &format!("http://{}/bar", test_addr),
+            &format!("http://{test_addr}/bar"),
         ));
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -283,7 +283,7 @@ async fn test_proxy_exact_path_handling() {
 
     // Test that /api/_test gets mapped correctly without extra slashes
     let response = client
-        .get(format!("http://{}/api/_test", proxy_addr))
+        .get(format!("http://{proxy_addr}/api/_test"))
         .send()
         .await
         .unwrap();
@@ -294,7 +294,7 @@ async fn test_proxy_exact_path_handling() {
 
     // Test with trailing slash to ensure it's preserved
     let response = client
-        .get(format!("http://{}/api/_test/", proxy_addr))
+        .get(format!("http://{proxy_addr}/api/_test/"))
         .send()
         .await
         .unwrap();
@@ -305,7 +305,7 @@ async fn test_proxy_exact_path_handling() {
 
     // Test without trailing slash at base path segment
     let response = client
-        .get(format!("http://{}/_test", proxy_addr))
+        .get(format!("http://{proxy_addr}/_test"))
         .send()
         .await
         .unwrap();
@@ -316,7 +316,7 @@ async fn test_proxy_exact_path_handling() {
 
     // Test without trailing slash at base path segment
     let response = client
-        .get(format!("http://{}/foo", proxy_addr))
+        .get(format!("http://{proxy_addr}/foo"))
         .send()
         .await
         .unwrap();
@@ -348,7 +348,7 @@ async fn test_proxy_query_parameters() {
     });
 
     // Create a reverse proxy
-    let proxy = ReverseProxy::new("/", &format!("http://{}", test_addr));
+    let proxy = ReverseProxy::new("/", &format!("http://{test_addr}"));
     let app: Router = proxy.into();
 
     let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -362,7 +362,7 @@ async fn test_proxy_query_parameters() {
 
     // Test simple query parameter
     let response = client
-        .get(format!("http://{}/echo?foo=bar", proxy_addr))
+        .get(format!("http://{proxy_addr}/echo?foo=bar"))
         .send()
         .await
         .unwrap();
@@ -374,8 +374,7 @@ async fn test_proxy_query_parameters() {
     // Test multiple query parameters
     let response = client
         .get(format!(
-            "http://{}/echo?foo=bar&baz=qux&special=hello%20world",
-            proxy_addr
+            "http://{proxy_addr}/echo?foo=bar&baz=qux&special=hello%20world"
         ))
         .send()
         .await
@@ -387,7 +386,7 @@ async fn test_proxy_query_parameters() {
 
     // Test empty query parameter
     let response = client
-        .get(format!("http://{}/echo?empty=", proxy_addr))
+        .get(format!("http://{proxy_addr}/echo?empty="))
         .send()
         .await
         .unwrap();
@@ -399,8 +398,7 @@ async fn test_proxy_query_parameters() {
     // Test special characters in query parameters
     let response = client
         .get(format!(
-            "http://{}/echo?special=%21%40%23%24%25%5E%26",
-            proxy_addr
+            "http://{proxy_addr}/echo?special=%21%40%23%24%25%5E%26"
         ))
         .send()
         .await

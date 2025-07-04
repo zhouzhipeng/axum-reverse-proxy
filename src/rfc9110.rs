@@ -95,10 +95,10 @@ impl std::fmt::Display for ViaEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", self.protocol, self.pseudonym)?;
         if let Some(port) = &self.port {
-            write!(f, ":{}", port)?;
+            write!(f, ":{port}")?;
         }
         if let Some(comment) = &self.comment {
-            write!(f, " {}", comment)?;
+            write!(f, " {comment}")?;
         }
         Ok(())
     }
@@ -330,7 +330,7 @@ fn process_max_forwards(request: &mut Request<Body>) -> Option<Response<Body>> {
                 if value == 0 {
                     let mut response = Response::new(Body::empty());
                     if *method == Method::TRACE {
-                        *response.body_mut() = Body::from(format!("{:?}", request));
+                        *response.body_mut() = Body::from(format!("{request:?}"));
                     } else {
                         // For OPTIONS, return 200 OK with Allow header
                         response.headers_mut().insert(
@@ -452,7 +452,7 @@ fn add_via_header(request: &mut Request<Body>, config: &Rfc9110Config) -> Option
     }
 
     // Add our new Via header value
-    let new_value = format!("{} {}", protocol_version, pseudonym);
+    let new_value = format!("{protocol_version} {pseudonym}");
     via_values.push(new_value);
 
     // Create the combined Via header value

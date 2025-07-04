@@ -160,7 +160,7 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
                     error!("Failed to handle WebSocket upgrade: {}", e);
                     return Ok(axum::http::Response::builder()
                         .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Body::from(format!("WebSocket upgrade failed: {}", e)))
+                        .body(Body::from(format!("WebSocket upgrade failed: {e}")))
                         .unwrap());
                 }
             }
@@ -216,8 +216,7 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
                 Ok(axum::http::Response::builder()
                     .status(StatusCode::BAD_GATEWAY)
                     .body(Body::from(format!(
-                        "Failed to connect to upstream server: {}",
-                        error_msg
+                        "Failed to connect to upstream server: {error_msg}"
                     )))
                     .unwrap())
             }
