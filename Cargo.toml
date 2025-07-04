@@ -1,6 +1,6 @@
 [package]
 name = "axum-reverse-proxy"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 description = "A flexible and efficient reverse proxy implementation for Axum web applications"
 license = "MIT"
@@ -23,8 +23,11 @@ hyper = { version = "^1.0", features = ["full"] }
 hyper-rustls = { version = "^0.27", optional = true }
 hyper-tls = { version = "^0.6", optional = true }
 hyper-util = { version = "^0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
+native-tls = { version = "^0.2", optional = true }
+rustls = { version = "^0.23", optional = true }
 sha1 = "^0.10"
 tokio = { version = "^1.45", features = ["full"] }
+tokio-native-tls = { version = "^0.3", optional = true }
 tokio-tungstenite = "^0.21"
 tower = { version = "^0.5", features = ["full"] }
 tracing = "^0.1"
@@ -35,17 +38,19 @@ rand = "0.9.1"
 [dev-dependencies]
 async-stream = "^0.3"
 criterion = { version = "^0.5", features = ["async", "futures"] }
+rcgen = "^0.13"
 reqwest = { version = "^0.11", features = ["json"] }
 serde_json = "^1.0"
 tokio = { version = "^1.45", features = ["full", "test-util"] }
+tokio-rustls = "^0.26"
 tower-buffer = "^0.3"
 tower-http = { version = "^0.6", features = ["full"] }
 tracing-subscriber = { version = "^0.3", features = ["env-filter"] }
 
 [features]
 default = ["tls"]
-tls = ["hyper-rustls"]
-native-tls = ["hyper-tls"]
+tls = ["hyper-rustls", "rustls"]
+native-tls = ["hyper-tls", "dep:native-tls", "tokio-native-tls"]
 dns = ["hickory-resolver"]
 full = ["tls", "dns"]
 
@@ -96,3 +101,8 @@ required-features = ["tls"]
 name = "dns_discovery"
 path = "examples/dns_discovery.rs"
 required-features = ["tls", "dns"]
+
+[[example]]
+name = "dangerous_client"
+path = "examples/dangerous_client.rs"
+required-features = ["tls"]
