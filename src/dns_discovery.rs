@@ -101,7 +101,7 @@ impl DnsDiscovery {
             .build()
         } else {
             Resolver::builder_tokio()
-                .map_err(|e| format!("Failed to create resolver from system config: {}", e))?
+                .map_err(|e| format!("Failed to create resolver from system config: {e}"))?
                 .build()
         };
 
@@ -232,7 +232,7 @@ impl StaticDnsDiscovery {
             .build()
         } else {
             Resolver::builder_tokio()
-                .map_err(|e| format!("Failed to create resolver from system config: {}", e))?
+                .map_err(|e| format!("Failed to create resolver from system config: {e}"))?
                 .build()
         };
 

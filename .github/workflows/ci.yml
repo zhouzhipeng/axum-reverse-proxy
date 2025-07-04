@@ -46,7 +46,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy -- -D warnings
+      - run: cargo clippy --features full -- -D warnings
       - name: Check benchmarks with clippy
         run: cargo clippy --benches -- -D warnings
 
