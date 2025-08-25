@@ -7,11 +7,64 @@ use sha1::{Digest, Sha1};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, timeout};
 use tokio_tungstenite::{
-    connect_async,
+    connect_async, connect_async_tls_with_config, Connector,
     tungstenite::{Error, Message},
 };
 use tracing::{error, trace};
 use url::{Host, Url};
+
+// 自定义证书验证器，用于忽略所有证书验证
+#[derive(Debug)]
+struct NoVerifier;
+
+impl rustls::client::danger::ServerCertVerifier for NoVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+    
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+    
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+    
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        vec![
+            rustls::SignatureScheme::RSA_PKCS1_SHA1,
+            rustls::SignatureScheme::ECDSA_SHA1_Legacy,
+            rustls::SignatureScheme::RSA_PKCS1_SHA256,
+            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
+            rustls::SignatureScheme::RSA_PKCS1_SHA384,
+            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
+            rustls::SignatureScheme::RSA_PKCS1_SHA512,
+            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
+            rustls::SignatureScheme::RSA_PSS_SHA256,
+            rustls::SignatureScheme::RSA_PSS_SHA384,
+            rustls::SignatureScheme::RSA_PSS_SHA512,
+            rustls::SignatureScheme::ED25519,
+            rustls::SignatureScheme::ED448,
+        ]
+    }
+}
 
 /// Check if a request is a WebSocket upgrade request by examining the headers.
 ///
@@ -85,6 +138,7 @@ pub(crate) fn compute_host_header(url: &str) -> (String, u16) {
 pub(crate) async fn handle_websocket(
     req: Request<Body>,
     target: &str,
+    ignore_cert: bool,
 ) -> Result<Response<Body>, Box<dyn std::error::Error + Send + Sync>> {
     trace!("Handling WebSocket upgrade request");
 
@@ -174,7 +228,7 @@ pub(crate) async fn handle_websocket(
     let (parts, body) = req.into_parts();
     let req = Request::from_parts(parts, body);
     tokio::spawn(async move {
-        match handle_websocket_connection(req, request).await {
+        match handle_websocket_connection(req, request, ignore_cert).await {
             Ok(_) => trace!("WebSocket connection closed gracefully"),
             Err(e) => error!("WebSocket connection error: {}", e),
         }
@@ -206,6 +260,7 @@ pub(crate) async fn handle_websocket(
 async fn handle_websocket_connection(
     req: Request<Body>,
     upstream_request: tokio_tungstenite::tungstenite::handshake::client::Request,
+    ignore_cert: bool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let upgraded = match timeout(Duration::from_secs(5), hyper::upgrade::on(req)).await {
         Ok(Ok(upgraded)) => upgraded,
@@ -221,12 +276,37 @@ async fn handle_websocket_connection(
     )
     .await;
 
-    let (upstream_ws, _) =
+    let (upstream_ws, _) = if ignore_cert {
+        // 使用忽略证书验证的连接
+        use rustls::ClientConfig;
+        use std::sync::Arc;
+        
+        // 创建忽略证书验证的 rustls 配置
+        let config = ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoVerifier))
+            .with_no_client_auth();
+        
+        let connector = Connector::Rustls(Arc::new(config));
+        
+        match timeout(Duration::from_secs(5), connect_async_tls_with_config(
+            upstream_request,
+            None,
+            false,
+            Some(connector),
+        )).await {
+            Ok(Ok(conn)) => conn,
+            Ok(Err(e)) => return Err(Box::new(e)),
+            Err(e) => return Err(Box::new(e)),
+        }
+    } else {
+        // 使用标准连接
         match timeout(Duration::from_secs(5), connect_async(upstream_request)).await {
             Ok(Ok(conn)) => conn,
             Ok(Err(e)) => return Err(Box::new(e)),
             Err(e) => return Err(Box::new(e)),
-        };
+        }
+    };
 
     let (mut client_sender, mut client_receiver) = client_ws.split();
     let (mut upstream_sender, mut upstream_receiver) = upstream_ws.split();

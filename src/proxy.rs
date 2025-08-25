@@ -24,6 +24,7 @@ pub struct ReverseProxy<C: Connect + Clone + Send + Sync + 'static> {
     path: String,
     target: String,
     client: Client<C, Body>,
+    ignore_cert: bool,
 }
 
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
@@ -122,6 +123,7 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
             path: path.into(),
             target: target.into(),
             client,
+            ignore_cert: false,
         }
     }
 
@@ -133,6 +135,12 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
     /// Get the target URL this proxy forwards requests to
     pub fn target(&self) -> &str {
         &self.target
+    }
+
+    /// Set whether to ignore certificate verification errors
+    pub fn with_ignore_cert(mut self, ignore_cert: bool) -> Self {
+        self.ignore_cert = ignore_cert;
+        self
     }
 
     /// Handles the proxying of a single request to the upstream server.
@@ -154,7 +162,7 @@ impl<C: Connect + Clone + Send + Sync + 'static> ReverseProxy<C> {
         // Check if this is a WebSocket upgrade request
         if websocket::is_websocket_upgrade(req.headers()) {
             trace!("Detected WebSocket upgrade request");
-            match websocket::handle_websocket(req, &self.target).await {
+            match websocket::handle_websocket(req, &self.target, self.ignore_cert).await {
                 Ok(response) => return Ok(response),
                 Err(e) => {
                     error!("Failed to handle WebSocket upgrade: {}", e);
