@@ -277,6 +277,7 @@ async fn handle_websocket_connection(
     .await;
 
     let (upstream_ws, _) = if ignore_cert {
+        tracing::warn!("WebSocket: Using certificate verification DISABLED for {}", upstream_url);
         // 使用忽略证书验证的连接
         use rustls::ClientConfig;
         use std::sync::Arc;
